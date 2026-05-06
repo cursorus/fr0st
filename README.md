@@ -1,7 +1,15 @@
-# darksword-kexploit-fun
+# darksword-kexploit-fun fork
+
+This fork first fixes exploit stability on A18 devices, including the iPhone 16 series.
+The A18 path now follows the working Lara-style race flow more closely: marker-initialized
+target file contents, stable local remap addresses, nonfatal missed-race handling, and
+longer zone-trimming retries.
+
+Fork of `wh1te4ever/darksword-kexploit-fun` for iOS security research.
+
 Building some cool stuff utilizing kernel r/w exploit
 
-## Supposed to be support devices
+## Supported Devices
 All iOS/iPadOS 17.0-26.0.1 devices, except A19/M5 devices
 
 ## Features
