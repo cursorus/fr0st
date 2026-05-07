@@ -37,6 +37,8 @@ void sign_state(uint64_t signingThread, arm_thread_state64_internal *state, uint
 uint64_t remote_pac(uint64_t remoteThreadAddr, uint64_t address, uint64_t modifier);
 bool remote_read(uint64_t src, void *dst, uint64_t size);
 void remote_hexdump(uint64_t remoteAddr, size_t size);
+bool remote_write(uint64_t dst, const void *src, uint64_t size);
+bool remote_write64(uint64_t dst, uint64_t val);
 bool remote_writeStr(uint64_t dst, const char *str);
 int destroy_remote_call(void);
 
