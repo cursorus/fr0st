@@ -12,14 +12,15 @@
 // Mirrors of the private SettingsSection enum values in SettingsViewController.m
 // (kept in sync — must match the underlying section indices used for the
 // detail-mode SettingsViewController push).
-static const NSInteger kSecSBC          = 4;
-static const NSInteger kSecStatBar      = 5;
-static const NSInteger kSecRSSI         = 6;
-static const NSInteger kSecPowercuff    = 9;
-static const NSInteger kSecLayoutExtras = 11;
-static const NSInteger kSecNanoRegistry = 12;
-static const NSInteger kSecThemer       = 13;
-static const NSInteger kSecLocationSim  = 14;
+static const NSInteger kSecSBC              = 4;
+static const NSInteger kSecStatBar          = 5;
+static const NSInteger kSecRSSI             = 6;
+static const NSInteger kSecPowercuff        = 9;
+static const NSInteger kSecDragCoefficient  = 11;
+static const NSInteger kSecLayoutExtras     = 12;
+static const NSInteger kSecNanoRegistry     = 13;
+static const NSInteger kSecThemer           = 14;
+static const NSInteger kSecLocationSim      = 15;
 
 + (NSArray<Package *> *)allPackages
 {
@@ -304,6 +305,22 @@ static const NSInteger kSecLocationSim  = 14;
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsDSDoubleTapToLock
                                           isNew:NO],
+
+            ({
+                Package *drag = [[Package alloc] initWithIdentifier:@"com.darksword.drag-coefficient"
+                                                               name:@"Drag Coefficient"
+                                                   shortDescription:@"Custom SpringBoard animation speed multiplier"
+                                                    longDescription:@"Overrides _UIAnimationDragCoefficient in SpringBoard to make all UIKit spring animations faster or slower.\n\nSet the coefficient in the Drag Coefficient settings panel. 50% = 0.50× (2× faster), 25% = 0.25× (4× faster), 100% = stock.\n\nImported from kolbicz/DarkSword-Tweaks."
+                                                            version:version
+                                                             author:@"kolbicz"
+                                                           category:@"SpringBoard Tweaks"
+                                                         symbolName:@"dial.medium.fill"
+                                                               kind:PackageInstallKindToggle
+                                                         enabledKey:kSettingsDSDragCoefficientEnabled
+                                                              isNew:YES];
+                drag.settingsSection = kSecDragCoefficient;
+                drag;
+            }),
 
             otaBlock,
 
