@@ -19,9 +19,9 @@
 # CFBundleShortVersionString, CFBundleVersion, the IPA filename, and the GitHub
 # release tag all flow from the bumped version.
 #
-# Release notes default to the commit *subject only* (first line) — so the
-# Releases page stays terse. Pass a second arg or NOTES_FILE for a richer
-# changelog.
+# Release notes default to auto-derived dirty-state bullets when possible,
+# falling back to the commit subject when the script cannot infer good detail.
+# Pass a second arg, NOTES, or NOTES_FILE to override the generated notes.
 #
 # Requires: git, gh (authenticated), xcodebuild.
 
@@ -324,12 +324,16 @@ fi
 # 1b. Regenerate Cyanide/Changelog.plist with the new version as the top entry,
 #     so the IPA we're about to build carries its own "What's New" content.
 #     Commits between the last release tag and HEAD become the changes list,
-#     plus the auto-derived EXTRA_BULLETS and the about-to-be-made release
-#     commit subject (if any) — pure "Bump …" lines are filtered as noise.
+#     plus the auto-derived EXTRA_BULLETS. If no richer bullets are available,
+#     the about-to-be-made release commit subject is used as the fallback.
 LAST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+CHANGELOG_MSG="$MSG"
+if [ -n "$EXTRA_BULLETS" ] && [ -z "${RELEASE_INCLUDE_SUMMARY_IN_CHANGELOG:-}" ]; then
+    CHANGELOG_MSG=""
+fi
 CHANGELOG_PENDING_VERSION="$NEW_VERSION" \
 CHANGELOG_PENDING_BASE="$LAST_TAG" \
-CHANGELOG_PENDING_MSG="$MSG" \
+CHANGELOG_PENDING_MSG="$CHANGELOG_MSG" \
 CHANGELOG_PENDING_EXTRA="$EXTRA_BULLETS" \
     ./scripts/gen-changelog.sh \
     || echo "==> changelog generation failed (continuing without it)"
@@ -438,19 +442,18 @@ HEAD_SHA=$(git rev-parse HEAD)
 TAG="$EFFECTIVE_TAG"
 SUBJECT=$(git log -1 --pretty=%s)
 
-# Release notes: explicit second arg > NOTES_FILE > NOTES env > commit subject
-# (plus auto-derived dirty-state bullets, if any).
+# Release notes: explicit second arg > NOTES_FILE > NOTES env > auto-derived
+# dirty-state bullets > commit subject.
 NOTES_FROM_FILE=""
 if [ -n "${NOTES_FILE:-}" ] && [ -f "${NOTES_FILE}" ]; then
     NOTES_FROM_FILE=$(cat "${NOTES_FILE}")
 fi
 NOTES_DEFAULT="$SUBJECT"
 if [ -n "$EXTRA_BULLETS" ]; then
-    NOTES_DEFAULT="${SUBJECT}
-
-$(printf '%s' "$EXTRA_BULLETS" | sed -e '/^[[:space:]]*$/d' -e 's/^/- /')"
+    NOTES_DEFAULT="$(printf '%s' "$EXTRA_BULLETS" \
+        | sed -e '/^[[:space:]]*$/d' -e 's/^/- /')"
 fi
-NOTES="${NOTES_ARG:-${NOTES:-${NOTES_FROM_FILE:-$NOTES_DEFAULT}}}"
+NOTES="${NOTES_ARG:-${NOTES_FROM_FILE:-${NOTES:-$NOTES_DEFAULT}}}"
 
 # Pin --repo to the origin push URL so gh doesn't try to create the release
 # on the upstream parent (which it prefers by default for forks).
