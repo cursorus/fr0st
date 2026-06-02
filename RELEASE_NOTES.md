@@ -16,7 +16,7 @@ Avoid vague bullets like "Update settings", "Change project files", or
 
 ## Pending
 
-- [ ] Added a maintained pending/released release-notes workflow so future releases use concrete bullets automatically.
+- [ ] Added a maintained pending/released release-notes workflow that drives GitHub notes and the in-app changelog without falling back to generic commit subjects.
 
 ## Released
 

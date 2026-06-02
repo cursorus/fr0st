@@ -406,13 +406,16 @@ fi
 #     the about-to-be-made release commit subject is used as the fallback.
 LAST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
 CHANGELOG_MSG="$MSG"
+CHANGELOG_SKIP_LOG=0
 if [ -n "$EXTRA_BULLETS" ] && [ -z "${RELEASE_INCLUDE_SUMMARY_IN_CHANGELOG:-}" ]; then
     CHANGELOG_MSG=""
+    CHANGELOG_SKIP_LOG=1
 fi
 CHANGELOG_PENDING_VERSION="$NEW_VERSION" \
 CHANGELOG_PENDING_BASE="$LAST_TAG" \
 CHANGELOG_PENDING_MSG="$CHANGELOG_MSG" \
 CHANGELOG_PENDING_EXTRA="$EXTRA_BULLETS" \
+CHANGELOG_PENDING_SKIP_LOG="$CHANGELOG_SKIP_LOG" \
     ./scripts/gen-changelog.sh \
     || echo "==> changelog generation failed (continuing without it)"
 
@@ -575,7 +578,7 @@ fi
 if gh release view "$TAG" --repo "$REPO_SLUG" >/dev/null 2>&1; then
     echo "==> release $TAG already exists on $REPO_SLUG; replacing IPA asset"
     gh release upload "$TAG" "$IPA" --repo "$REPO_SLUG" --clobber
-    gh release edit "$TAG" --repo "$REPO_SLUG" --title "$RELEASE_TITLE" --latest
+    gh release edit "$TAG" --repo "$REPO_SLUG" --title "$RELEASE_TITLE" --notes "$NOTES" --latest
 else
     echo "==> creating release $TAG on $REPO_SLUG"
     gh release create "$TAG" "$IPA" \

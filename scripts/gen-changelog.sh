@@ -31,6 +31,9 @@
 #                              PENDING_MSG. Used by release.sh to inject heuristically
 #                              derived bullets (new tweak files, new packages) so a
 #                              one-line MSG still produces a multi-bullet entry.
+#   CHANGELOG_PENDING_SKIP_LOG set to 1 to skip BASE..HEAD commit subjects for
+#                              the pending entry. Used when RELEASE_NOTES.md or
+#                              auto-derived bullets are the intended source.
 #
 # Invoked from scripts/release.sh before xcodebuild. The output is gitignored —
 # regenerated each release, never committed.
@@ -45,6 +48,7 @@ PENDING_VERSION="${CHANGELOG_PENDING_VERSION:-}"
 PENDING_BASE="${CHANGELOG_PENDING_BASE:-}"
 PENDING_MSG="${CHANGELOG_PENDING_MSG:-}"
 PENDING_EXTRA="${CHANGELOG_PENDING_EXTRA:-}"
+PENDING_SKIP_LOG="${CHANGELOG_PENDING_SKIP_LOG:-0}"
 
 xml_escape() {
     # &  <  >  only — strings inside <string> tags don't need quote escaping.
@@ -120,7 +124,9 @@ trap 'rm -f "$TMP"' EXIT
         echo "    <key>date</key><string>${TODAY}</string>"
         echo "    <key>changes</key>"
         echo "    <array>"
-        if [ -n "$PENDING_BASE" ] && git rev-parse -q --verify "refs/tags/${PENDING_BASE}" >/dev/null; then
+        if [ "$PENDING_SKIP_LOG" != "1" ] &&
+           [ -n "$PENDING_BASE" ] &&
+           git rev-parse -q --verify "refs/tags/${PENDING_BASE}" >/dev/null; then
             while IFS= read -r SUBJ; do
                 emit_change_line "$SUBJ"
             done < <(git log --reverse --no-merges --pretty=tformat:%s "${PENDING_BASE}..HEAD" 2>/dev/null)
