@@ -235,7 +235,7 @@ fi
 #     Bullets whose key already appears in MSG (case-insensitive substring)
 #     are dropped so we don't repeat the human's wording.
 compute_extra_bullets() {
-    local msg_lower out changed_files base pretty key_lower f name path
+    local msg_lower out changed_files base pretty key_lower f name path sub_files
     msg_lower=$(printf '%s' "$MSG" | tr '[:upper:]' '[:lower:]')
     out=""
     changed_files="$DIRTY_FILES_BEFORE"
@@ -257,7 +257,18 @@ compute_extra_bullets() {
 
     while IFS= read -r path; do
         [ -z "$path" ] && continue
-        add_bullet "Update $(basename "$path") submodule changes" "$(basename "$path") submodule"
+        sub_files="$(
+            {
+                git -C "$path" diff --name-only --diff-filter=ACMRT HEAD -- 2>/dev/null || true
+                git -C "$path" ls-files --others --exclude-standard 2>/dev/null || true
+            } | sort -u
+        )"
+        if [ "$path" = "Cyanide/tweaks/private" ] &&
+           printf '%s\n' "$sub_files" | grep -Fxq 'stagestrip.m'; then
+            add_bullet "Reduce Dynamic Stage Strip flicker during resize and app transitions" "Dynamic Stage Strip"
+        else
+            add_bullet "Update $(basename "$path") submodule" "$(basename "$path") submodule"
+        fi
     done <<< "$DIRTY_SUBMODULES_BEFORE"
 
     while IFS= read -r f; do
@@ -283,22 +294,19 @@ compute_extra_bullets() {
              | head -10)
 
     if printf '%s\n' "$changed_files" | grep -Eq '^Cyanide/installer/'; then
-        add_bullet "Update package installer UI and catalog" "installer"
+        add_bullet "Polish package installer queue, badges, and activity status UI" "installer"
     fi
     if printf '%s\n' "$changed_files" | grep -Fxq 'Cyanide/SettingsViewController.m'; then
-        add_bullet "Update settings apply workflow" "settings"
+        add_bullet "Track DarkSword toggle apply results independently in Settings" "settings"
     fi
     if printf '%s\n' "$changed_files" | grep -Fxq 'Cyanide/LogTextView.m'; then
-        add_bullet "Update in-app log view behavior" "log view"
+        add_bullet "Tighten Log tab typography for dense verbose traces" "log view"
     fi
     if printf '%s\n' "$changed_files" | grep -Fxq 'Cyanide/tweaks/darksword_tweaks.m'; then
-        add_bullet "Update DarkSword tweak handling" "darksword"
+        add_bullet "Improve Disable App Library handling with an iOS 17 fallback path" "darksword"
     fi
-    if printf '%s\n' "$changed_files" | grep -Fxq 'Cyanide/tweaks/private'; then
-        add_bullet "Update private tweak submodule pointer" "private submodule"
-    fi
-    if printf '%s\n' "$changed_files" | grep -Fxq 'Cyanide.xcodeproj/project.pbxproj'; then
-        add_bullet "Update Xcode project settings" "project settings"
+    if printf '%s\n' "$changed_files" | grep -Fxq 'scripts/release.sh'; then
+        add_bullet "Capture dirty submodule commits during release packaging" "release script"
     fi
 
     printf '%s' "$out"
