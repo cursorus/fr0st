@@ -19,6 +19,11 @@ Avoid vague bullets like "Update settings", "Change project files", or
 
 ## Released
 
+### v1.2.4 - 2026-06-03
+
+- [x] Added a StatBar refresh-rate setting and reduced battery use from repeated temperature polling.
+- [x] Fixed Installer queue edge cases so no-op applies finish cleanly and pending activations are remembered after reopening Cyanide.
+
 ### v1.2.3 - 2026-06-03
 
 - [x] Improved Gravity Lite startup on iOS 17 by using the faster live-icon capture path.

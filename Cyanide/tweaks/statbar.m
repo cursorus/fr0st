@@ -129,7 +129,14 @@ static double read_battery_temp_c_remote(void)
 static double read_battery_temp_c(void)
 {
     static double cachedTempC = -1.0;
+    static time_t lastTempRead = 0;
     static time_t lastRemoteRead = 0;
+
+    time_t now = time(NULL);
+    if (lastTempRead != 0 && now >= lastTempRead && (now - lastTempRead) < 30) {
+        return cachedTempC;
+    }
+    lastTempRead = now;
 
     double localTempC = read_battery_temp_c_local();
     if (localTempC > 0) {
@@ -139,7 +146,6 @@ static double read_battery_temp_c(void)
         return cachedTempC;
     }
 
-    time_t now = time(NULL);
     if (lastRemoteRead != 0 && now >= lastRemoteRead && (now - lastRemoteRead) < 60) {
         return cachedTempC;
     }

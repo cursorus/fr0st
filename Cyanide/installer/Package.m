@@ -63,7 +63,8 @@
 {
     if (self.kind != PackageInstallKindToggle || !self.enabledKey) return NO;
     if (self.isInstallDisabled) return NO;
-    return NO;
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    return [d boolForKey:self.enabledKey] && !settings_tweak_is_applied(self.enabledKey);
 }
 
 - (BOOL)isInstallDisabled

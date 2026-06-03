@@ -122,7 +122,7 @@ static NSString * const kTipsExpandedDefault    = @"installer.tipsExpanded";
         @{ @"icon":  @"wand.and.stars",
            @"color": UIColor.systemPurpleColor,
            @"title": @"What's new",
-           @"body":  @"• Home Layout Extras — extra padding and per-icon scaling for the home grid and dock\n• StatBar now has a CPU% slot and slimmer KB/MB-only network speed\n• Manual Check for Updates button in Settings → Quick Actions\n• Smoother respring overlay" },
+           @"body":  @"• Gravity Lite adds home screen and dock icon physics with widget support\n• Drag Coefficient lets you tune SpringBoard animation speed\n• Installer state is more reliable after applying or reopening Cyanide\n• StatBar uses less battery and now has an adjustable refresh rate" },
         @{ @"icon":  @"exclamationmark.triangle.fill",
            @"color": UIColor.systemOrangeColor,
            @"title": @"Don't force-quit Cyanide",

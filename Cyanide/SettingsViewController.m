@@ -166,6 +166,7 @@ NSString * const kSettingsStatBarCelsius = @"StatBarCelsius";
 NSString * const kSettingsStatBarShowNet = @"StatBarShowNet";
 NSString * const kSettingsStatBarShowCPU = @"StatBarShowCPU";
 NSString * const kSettingsStatBarShowLabels = @"StatBarShowLabels";
+NSString * const kSettingsStatBarRefreshRateSec = @"StatBarRefreshRateSec";
 
 NSString * const kSettingsRSSIDisplayEnabled = @"RSSIDisplayEnabled";
 NSString * const kSettingsRSSIDisplayWifi    = @"RSSIDisplayWifi";
@@ -491,7 +492,7 @@ static const NSInteger kLocationSimDefaultAccuracy = 5;
 static const NSInteger kNanoUIRowMin = 1;
 static const NSInteger kNanoUIRowMax = 999;
 static const useconds_t kStatBarLiveIntervalUS = 1000000;
-static const useconds_t kStatBarLiveBackgroundIntervalUS = 1000000;
+static const NSInteger kStatBarDefaultRefreshRateSec = 1;
 static const NSUInteger kStatBarLiveMaxTicks = 43200;
 static const int64_t kLiveBackgroundTaskGraceSeconds = 10;
 static const useconds_t kRSSILiveIntervalUS = 250000;
@@ -679,6 +680,21 @@ static BOOL settings_should_log_statbar_tick(NSUInteger tick) {
 static useconds_t settings_live_interval(useconds_t foregroundUS, useconds_t backgroundUS)
 {
     return (g_app_in_background != 0) ? backgroundUS : foregroundUS;
+}
+
+static useconds_t settings_statbar_refresh_rate_us(void)
+{
+    NSInteger sec = [[NSUserDefaults standardUserDefaults] integerForKey:kSettingsStatBarRefreshRateSec];
+    if (sec <= 0) sec = kStatBarDefaultRefreshRateSec;
+    if (sec < 1) sec = 1;
+    if (sec > 30) sec = 30;
+    return (useconds_t)sec * 1000000;
+}
+
+static useconds_t settings_statbar_live_interval_us(void)
+{
+    return settings_live_interval(kStatBarLiveIntervalUS,
+                                  settings_statbar_refresh_rate_us());
 }
 
 static const char *settings_live_context(void)
@@ -2406,7 +2422,7 @@ static void settings_start_statbar_live_loop(void)
 
         printf("[SETTINGS] StatBar live loop started interval=%uus background=%uus max=%lu\n",
                kStatBarLiveIntervalUS,
-               kStatBarLiveBackgroundIntervalUS,
+               settings_statbar_refresh_rate_us(),
                (unsigned long)kStatBarLiveMaxTicks);
         cyanide_upload_log_milestone(@"statbar-live-started");
 
@@ -2415,8 +2431,7 @@ static void settings_start_statbar_live_loop(void)
                    !settings_cleanup_in_progress() &&
                    !g_statbar_live_stop_requested &&
                    tick < kStatBarLiveMaxTicks) {
-                useconds_t intervalUS = settings_live_interval(kStatBarLiveIntervalUS,
-                                                               kStatBarLiveBackgroundIntervalUS);
+                useconds_t intervalUS = settings_statbar_live_interval_us();
                 if (!settings_statbar_screen_awake()) {
                     if (!pausedForSleep) {
                         pausedForSleep = YES;
@@ -2470,8 +2485,7 @@ static void settings_start_statbar_live_loop(void)
                 uint64_t nowUS = settings_now_us();
                 uint64_t elapsedUS = (tickStartUS != 0 && nowUS >= tickStartUS) ? (nowUS - tickStartUS) : 0;
                 if (nextTickUS != 0) {
-                    intervalUS = settings_live_interval(kStatBarLiveIntervalUS,
-                                                        kStatBarLiveBackgroundIntervalUS);
+                    intervalUS = settings_statbar_live_interval_us();
                     nextTickUS += intervalUS;
                     if (nowUS < nextTickUS) {
                         uint64_t sleepUS = nextTickUS - nowUS;
@@ -2498,8 +2512,7 @@ static void settings_start_statbar_live_loop(void)
                     }
                 } else {
                     settings_live_loop_sleep_interruptible(0,
-                                                           settings_live_interval(kStatBarLiveIntervalUS,
-                                                                                  kStatBarLiveBackgroundIntervalUS),
+                                                           settings_statbar_live_interval_us(),
                                                            &g_statbar_live_stop_requested);
                 }
             }
@@ -3331,7 +3344,8 @@ static BOOL settings_key_is_statbar(NSString *key)
            [key isEqualToString:kSettingsStatBarCelsius] ||
            [key isEqualToString:kSettingsStatBarShowNet] ||
            [key isEqualToString:kSettingsStatBarShowCPU] ||
-           [key isEqualToString:kSettingsStatBarShowLabels];
+           [key isEqualToString:kSettingsStatBarShowLabels] ||
+           [key isEqualToString:kSettingsStatBarRefreshRateSec];
 }
 
 static BOOL settings_key_is_rssi(NSString *key)
@@ -3857,6 +3871,7 @@ void settings_register_defaults(void)
         kSettingsStatBarShowNet:    @NO,
         kSettingsStatBarShowCPU:    @YES,
         kSettingsStatBarShowLabels: @YES,
+        kSettingsStatBarRefreshRateSec: @(kStatBarDefaultRefreshRateSec),
 
         kSettingsRSSIDisplayEnabled: @NO,
         kSettingsRSSIDisplayWifi:    @YES,
@@ -3987,7 +4002,8 @@ static void settings_run_actions_internal(BOOL pendingOnly)
             // and reuses the open SpringBoard session for text-only updates.
             BOOL needsSpringBoard = runSandboxEscape || needsSpringBoardWork;
 
-            NSUInteger total = 1;
+            BOOL hasRunWork = patchSandboxExt || runPowercuff || needsSpringBoard;
+            NSUInteger total = hasRunWork ? 1 : 0;
             if (patchSandboxExt) total++;
             if (runPowercuff) total++;
             if (needsSpringBoard) total++;
@@ -4024,6 +4040,20 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                      (unsigned long)total,
                      enabledTweaks.count ? [[enabledTweaks componentsJoinedByString:@", "] UTF8String] : "none");
             cyanide_upload_log_milestone(@"run-plan");
+
+            if (!hasRunWork) {
+                if (!statBarEnabled) g_statbar_live_stop_requested = 1;
+                if (!rssiEnabled) g_rssi_live_stop_requested = 1;
+                if (!axonLiteEnabled) g_axonlite_live_stop_requested = 1;
+                if (!typeBannerEnabled) g_typebanner_live_stop_requested = 1;
+                if (!gravityLiteEnabled) settings_request_gravitylite_stop();
+                if (!stageStripEnabled) settings_request_stagestrip_stop();
+                log_user("[DONE] No pending runtime changes to apply.\n");
+                runSucceeded = YES;
+                runCompletionMessage = @"Done. No pending runtime changes to apply.";
+                cyanide_upload_log_milestone(@"run-noop");
+                return;
+            }
 
             settings_progress(&step, total, "Racing kernel allocator for r/w primitives");
             if (!settings_ensure_kexploit()) {
@@ -4203,7 +4233,7 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                     }
 
                     if (runStatBar) {
-                        settings_progress(&step, total, "Starting StatBar overlay and 1s feed");
+                        settings_progress(&step, total, "Starting StatBar overlay and live feed");
                         bool ok = statbar_apply_in_session([d boolForKey:kSettingsStatBarCelsius],
                                                            [d boolForKey:kSettingsStatBarShowNet],
                                                            [d boolForKey:kSettingsStatBarShowCPU],
@@ -4212,7 +4242,7 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                                                     ok && [d boolForKey:kSettingsStatBarEnabled]);
                         log_user("%s StatBar %s.\n",
                                  ok ? "[OK]" : "[WARN]",
-                                 ok ? "reading thermal + memory every 1s" : "did not start cleanly");
+                                 ok ? "showing thermal + memory overlay" : "did not start cleanly");
                         cyanide_upload_log_milestone(ok ? @"statbar-initial-applied" : @"statbar-initial-failed");
                     }
 
@@ -5130,6 +5160,9 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         @{ @"kind": @"toggle", @"key": kSettingsStatBarShowCPU,     @"title": @"Show CPU %" },
         @{ @"kind": @"toggle", @"key": kSettingsStatBarShowLabels,  @"title": @"Show CPU / RAM labels" },
         @{ @"kind": @"toggle", @"key": kSettingsStatBarShowNet,     @"title": @"Show network speed" },
+        @{ @"kind": @"slider", @"key": kSettingsStatBarRefreshRateSec,
+           @"title": @"Refresh rate", @"min": @1, @"max": @30, @"step": @1,
+           @"unit": @"s", @"default": @(kStatBarDefaultRefreshRateSec) },
     ];
 }
 
@@ -5317,6 +5350,8 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         [out addObject:@{@"title": @"Show CPU %",          @"value": [d boolForKey:kSettingsStatBarShowCPU]    ? @"On" : @"Off"}];
         [out addObject:@{@"title": @"Show CPU/RAM labels", @"value": [d boolForKey:kSettingsStatBarShowLabels] ? @"On" : @"Off"}];
         [out addObject:@{@"title": @"Show net speed",      @"value": [d boolForKey:kSettingsStatBarShowNet]    ? @"On" : @"Off"}];
+        [out addObject:@{@"title": @"Refresh rate",        @"value": [NSString stringWithFormat:@"%lds",
+                                                                       (long)[d integerForKey:kSettingsStatBarRefreshRateSec]]}];
     } else if (section == SectionRSSI) {
         [out addObject:@{@"title": @"WiFi (bar count)", @"value": [d boolForKey:kSettingsRSSIDisplayWifi] ? @"On" : @"Off"}];
         [out addObject:@{@"title": @"Cellular (dBm)",   @"value": [d boolForKey:kSettingsRSSIDisplayCell] ? @"On" : @"Off"}];
@@ -5571,7 +5606,7 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         return @"Underclocks the CPU/GPU via thermalmonitord by simulating thermal pressure. Nominal is the daily-use default. Light, Moderate, and Heavy intentionally underclock the CPU more and can make the device feel laggy, especially on older hardware.";
     }
     if (s == SectionStatBar) {
-        return @"Live overlay. When enabled, StatBar keeps a SpringBoard RemoteCall session open and refreshes once per second until toggled off.";
+        return @"Live overlay. When enabled, StatBar keeps a SpringBoard RemoteCall session open. Refresh rate applies when Cyanide is minimized but the screen is still awake; StatBar pauses while the screen is locked or asleep.";
     }
     if (s == SectionRSSI) {
         return @"Adds a UILabel as a sibling of each STUI signal view (no new UIWindow), refreshed every second. Cellular shows live RSRP dBm (sign implicit). WiFi shows the bar count (0-4); the wifid XPC dBm path crashed SpringBoard in prior tests.";

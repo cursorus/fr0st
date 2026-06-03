@@ -42,6 +42,7 @@ extern NSString * const kSettingsStatBarCelsius;
 extern NSString * const kSettingsStatBarShowNet;
 extern NSString * const kSettingsStatBarShowCPU;
 extern NSString * const kSettingsStatBarShowLabels;
+extern NSString * const kSettingsStatBarRefreshRateSec;
 
 extern NSString * const kSettingsRSSIDisplayEnabled;
 extern NSString * const kSettingsRSSIDisplayWifi;
