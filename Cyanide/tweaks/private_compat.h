@@ -1,0 +1,260 @@
+//
+//  private_compat.h
+//  Cyanide
+//
+//  Public builds do not have the private experimental tweak submodule. Import
+//  the real APIs when present; otherwise provide no-op shims so the shared app
+//  can still compile and hide those features at the catalog/UI layer.
+//
+
+#ifndef private_compat_h
+#define private_compat_h
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+@class RemoteCallSession;
+#endif
+
+#ifndef __has_include
+#define __has_include(x) 0
+#endif
+
+#if __has_include("private/rssidisplay.h") && \
+    __has_include("private/typebanner.h") && \
+    __has_include("private/call_recording_sound.h") && \
+    __has_include("private/stagestrip.h") && \
+    __has_include("private/location_sim.h")
+
+#define CYANIDE_PRIVATE_TWEAKS_AVAILABLE 1
+
+#import "private/rssidisplay.h"
+#import "private/typebanner.h"
+#import "private/call_recording_sound.h"
+#import "private/stagestrip.h"
+#import "private/location_sim.h"
+
+#else
+
+#define CYANIDE_PRIVATE_TWEAKS_AVAILABLE 0
+
+#define TYPEBANNER_RC_FIRST_EXCEPTION_TIMEOUT_MS 8000
+#define TYPEBANNER_RC_MOBILESMS_FIRST_EXCEPTION_TIMEOUT_MS 1000
+
+typedef struct {
+    double latitude;
+    double longitude;
+    double altitude;
+    double horizontalAccuracy;
+    double verticalAccuracy;
+    const char *hostProcess;
+    bool launchHost;
+} LocationSimConfig;
+
+static inline bool rssidisplay_apply_in_session(bool showWifi, bool showCell)
+{
+    (void)showWifi;
+    (void)showCell;
+    return false;
+}
+
+static inline bool rssidisplay_stop_in_session(void)
+{
+    return false;
+}
+
+static inline void rssidisplay_forget_remote_state(void)
+{
+}
+
+static inline bool call_recording_sound_set_disabled(bool disabled)
+{
+    (void)disabled;
+    return false;
+}
+
+static inline bool stagestrip_apply(int maxSlots)
+{
+    (void)maxSlots;
+    return false;
+}
+
+static inline bool stagestrip_apply_in_session(int maxSlots)
+{
+    (void)maxSlots;
+    return false;
+}
+
+static inline bool stagestrip_stop_in_session(void)
+{
+    return false;
+}
+
+static inline void stagestrip_start_control_loop(void)
+{
+}
+
+static inline void stagestrip_stop_control_loop(void)
+{
+}
+
+static inline void stagestrip_forget_remote_state(void)
+{
+}
+
+static inline bool locationsim_apply_static(const LocationSimConfig *config)
+{
+    (void)config;
+    return false;
+}
+
+static inline bool locationsim_apply_strict_hosts(const LocationSimConfig *config)
+{
+    (void)config;
+    return false;
+}
+
+static inline bool locationsim_stop(const char *hostProcess, bool launchHost)
+{
+    (void)hostProcess;
+    (void)launchHost;
+    return false;
+}
+
+static inline bool locationsim_stop_strict_hosts(const char *hostProcess, bool launchHost)
+{
+    (void)hostProcess;
+    (void)launchHost;
+    return false;
+}
+
+#ifdef __OBJC__
+static inline bool typebanner_prepare_in_springboard_session(void)
+{
+    return false;
+}
+
+static inline bool typebanner_prepare_in_springboard_remote_session(RemoteCallSession *session)
+{
+    (void)session;
+    return false;
+}
+
+static inline bool typebanner_show_in_springboard_session(NSString *displayName)
+{
+    (void)displayName;
+    return false;
+}
+
+static inline bool typebanner_show_in_springboard_remote_session(RemoteCallSession *session, NSString *displayName)
+{
+    (void)session;
+    (void)displayName;
+    return false;
+}
+
+static inline bool typebanner_hide_in_springboard_session(void)
+{
+    return false;
+}
+
+static inline bool typebanner_hide_in_springboard_remote_session(RemoteCallSession *session)
+{
+    (void)session;
+    return false;
+}
+
+static inline bool typebanner_ensure_mobilesms_keepalive_in_springboard_session(uint32_t pid)
+{
+    (void)pid;
+    return false;
+}
+
+static inline bool typebanner_ensure_mobilesms_keepalive_in_springboard_remote_session(RemoteCallSession *session, uint32_t pid)
+{
+    (void)session;
+    (void)pid;
+    return false;
+}
+
+static inline bool typebanner_release_mobilesms_keepalive_in_springboard_session(void)
+{
+    return true;
+}
+
+static inline bool typebanner_release_mobilesms_keepalive_in_springboard_remote_session(RemoteCallSession *session)
+{
+    (void)session;
+    return true;
+}
+
+static inline NSString *typebanner_poll_in_mobilesms_session(void)
+{
+    return nil;
+}
+
+static inline NSString *typebanner_poll_in_mobilesms_remote_session(RemoteCallSession *session)
+{
+    (void)session;
+    return nil;
+}
+
+static inline NSString *typebanner_poll_in_imagent_remote_session(RemoteCallSession *session)
+{
+    (void)session;
+    return nil;
+}
+
+static inline void typebanner_diagnose_in_mobilesms_session(void)
+{
+}
+
+static inline void typebanner_diagnose_in_mobilesms_remote_session(RemoteCallSession *session)
+{
+    (void)session;
+}
+
+static inline bool typebanner_run_once(void)
+{
+    return false;
+}
+
+static inline bool typebanner_run_once_with_mobile_session(RemoteCallSession **mobileSessionRef)
+{
+    (void)mobileSessionRef;
+    return false;
+}
+
+static inline bool typebanner_run_once_with_mobile_session_and_current_springboard(RemoteCallSession **mobileSessionRef,
+                                                                                  bool currentSpringBoardReady)
+{
+    (void)mobileSessionRef;
+    (void)currentSpringBoardReady;
+    return false;
+}
+
+static inline bool typebanner_has_remote_state(void)
+{
+    return false;
+}
+
+static inline void typebanner_forget_remote_state(void)
+{
+}
+
+static inline bool typebanner_mobile_was_unreachable_last_tick(void)
+{
+    return false;
+}
+#endif
+
+#endif
+
+static inline bool cyanide_private_tweaks_available(void)
+{
+    return CYANIDE_PRIVATE_TWEAKS_AVAILABLE != 0;
+}
+
+#endif /* private_compat_h */

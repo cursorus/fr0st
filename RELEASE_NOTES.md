@@ -16,6 +16,7 @@ Avoid vague bullets like "Update settings", "Change project files", or
 
 ## Pending
 
+- [ ] Allowed public Cyanide checkouts to build without the private experimental tweak submodule.
 
 ## Released
 

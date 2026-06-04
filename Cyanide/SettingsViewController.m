@@ -8,19 +8,15 @@
 #import "tweaks/sbcustomizer.h"
 #import "tweaks/powercuff.h"
 #import "tweaks/statbar.h"
-#import "tweaks/private/rssidisplay.h"
+#import "tweaks/private_compat.h"
 #import "tweaks/axonlite.h"
-#import "tweaks/private/typebanner.h"
 #import "tweaks/darksword_tweaks.h"
 #import "tweaks/darksword_drag.h"
 #import "tweaks/darksword_ota.h"
 #import "tweaks/darksword_layout.h"
 #import "tweaks/nano_registry.h"
-#import "tweaks/private/call_recording_sound.h"
 #import "tweaks/killallapps.h"
-#import "tweaks/private/stagestrip.h"
 #import "tweaks/themer.h"
-#import "tweaks/private/location_sim.h"
 #import "tweaks/gravitylite.h"
 #import <CoreMotion/CoreMotion.h>
 
@@ -726,12 +722,22 @@ static BOOL settings_experimental_tweaks_enabled(void)
 
 static BOOL settings_rssi_install_allowed(void)
 {
-    return settings_experimental_tweaks_enabled();
+    return cyanide_private_tweaks_available() && settings_experimental_tweaks_enabled();
+}
+
+static BOOL settings_typebanner_install_allowed(void)
+{
+    return cyanide_private_tweaks_available() && settings_experimental_tweaks_enabled();
+}
+
+static BOOL settings_stagestrip_install_allowed(void)
+{
+    return cyanide_private_tweaks_available() && settings_experimental_tweaks_enabled();
 }
 
 static BOOL settings_location_sim_install_allowed(void)
 {
-    return settings_experimental_tweaks_enabled();
+    return cyanide_private_tweaks_available() && settings_experimental_tweaks_enabled();
 }
 
 static BOOL settings_read_screen_awake(void)
@@ -2301,6 +2307,10 @@ BOOL settings_apply_nano_registry_now(BOOL apply)
 
 BOOL settings_apply_call_recording_sound_disabled(BOOL disabled)
 {
+    if (!cyanide_private_tweaks_available()) {
+        log_user("[CALLREC] Failed: private tweak implementation is not present in this build.\n");
+        return NO;
+    }
     if (!settings_ensure_kexploit()) {
         log_user("[CALLREC] Failed: kernel primitives were not acquired.\n");
         return NO;
@@ -3273,7 +3283,7 @@ void settings_application_did_enter_background(void)
         ([d boolForKey:kSettingsStatBarEnabled]     && g_springboard_rc_ready) ||
         ([d boolForKey:kSettingsGravityLiteEnabled] && g_springboard_rc_ready) ||
         ([d boolForKey:kSettingsThemerEnabled]      && g_springboard_rc_ready) ||
-        [d boolForKey:kSettingsTypeBannerEnabled];
+        (settings_typebanner_install_allowed() && [d boolForKey:kSettingsTypeBannerEnabled]);
     if (anyLiveLoopNeeded) {
         if ([d boolForKey:kSettingsKeepAlive]) {
             ds_keepalive_apply_enabled(YES);
@@ -3310,7 +3320,8 @@ void settings_application_will_enter_foreground(void)
     settings_apply_rssi_once_async("will enter foreground");
     settings_apply_axonlite_once_async("will enter foreground");
     settings_start_themer_live_loop();
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:kSettingsTypeBannerEnabled]) {
+    if (settings_typebanner_install_allowed() &&
+        [[NSUserDefaults standardUserDefaults] boolForKey:kSettingsTypeBannerEnabled]) {
         settings_start_typebanner_live_loop();
     }
 }
@@ -3324,7 +3335,8 @@ void settings_application_did_become_active(void)
     settings_apply_rssi_once_async("became active");
     settings_apply_axonlite_once_async("became active");
     settings_start_themer_live_loop();
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:kSettingsTypeBannerEnabled]) {
+    if (settings_typebanner_install_allowed() &&
+        [[NSUserDefaults standardUserDefaults] boolForKey:kSettingsTypeBannerEnabled]) {
         settings_start_typebanner_live_loop();
     }
 }
@@ -3593,6 +3605,17 @@ static void settings_schedule_live_apply_for_key(NSString *key)
     }
 
     if (settings_key_is_typebanner(key)) {
+        if (!settings_typebanner_install_allowed()) {
+            if ([d boolForKey:kSettingsTypeBannerEnabled]) {
+                [d setBool:NO forKey:kSettingsTypeBannerEnabled];
+                [d synchronize];
+            }
+            g_typebanner_live_stop_requested = 1;
+            settings_mark_tweak_applied(kSettingsTypeBannerEnabled, NO);
+            settings_notify_package_queue_changed_async();
+            typebanner_forget_remote_state();
+            return;
+        }
         // TypeBanner owns its own daemon + SpringBoard sessions, but its
         // bootstrap is serialized with the shared RemoteCall lock.
         if ([d boolForKey:kSettingsTypeBannerEnabled]) {
@@ -3911,6 +3934,23 @@ void settings_register_defaults(void)
         kSettingsNanoMinPairingChipID: @(kNanoDefaultMinPairingChipID),
         kSettingsNanoMinQuickSwitch:   @(kNanoDefaultMinQuickSwitch),
     }];
+    if (!cyanide_private_tweaks_available()) {
+        BOOL changed = NO;
+        NSArray<NSString *> *privateKeys = @[
+            kSettingsRSSIDisplayEnabled,
+            kSettingsTypeBannerEnabled,
+            kSettingsStageStripEnabled,
+            kSettingsLocationSimEnabled,
+            kSettingsLocationSimStarted,
+        ];
+        for (NSString *key in privateKeys) {
+            if ([defaults boolForKey:key]) {
+                [defaults setBool:NO forKey:key];
+                changed = YES;
+            }
+        }
+        if (changed) [defaults synchronize];
+    }
     if (!settings_experimental_access_allowed()) {
         if ([defaults boolForKey:kSettingsExperimentalTweaksEnabled]) {
             [defaults setBool:NO forKey:kSettingsExperimentalTweaksEnabled];
@@ -3920,6 +3960,9 @@ void settings_register_defaults(void)
         }
         if ([defaults boolForKey:kSettingsTypeBannerEnabled]) {
             [defaults setBool:NO forKey:kSettingsTypeBannerEnabled];
+        }
+        if ([defaults boolForKey:kSettingsStageStripEnabled]) {
+            [defaults setBool:NO forKey:kSettingsStageStripEnabled];
         }
         if ([defaults boolForKey:kSettingsLocationSimEnabled]) {
             [defaults setBool:NO forKey:kSettingsLocationSimEnabled];
@@ -3931,8 +3974,16 @@ void settings_register_defaults(void)
             [defaults setBool:NO forKey:kSettingsRSSIDisplayEnabled];
             changed = YES;
         }
+        if ([defaults boolForKey:kSettingsTypeBannerEnabled]) {
+            [defaults setBool:NO forKey:kSettingsTypeBannerEnabled];
+            changed = YES;
+        }
         if ([defaults boolForKey:kSettingsLocationSimEnabled]) {
             [defaults setBool:NO forKey:kSettingsLocationSimEnabled];
+            changed = YES;
+        }
+        if ([defaults boolForKey:kSettingsStageStripEnabled]) {
+            [defaults setBool:NO forKey:kSettingsStageStripEnabled];
             changed = YES;
         }
         if (changed) [defaults synchronize];
@@ -3980,20 +4031,20 @@ static void settings_run_actions_internal(BOOL pendingOnly)
             BOOL statBarEnabled = [d boolForKey:kSettingsStatBarEnabled];
             BOOL rssiEnabled = settings_rssi_install_allowed() && [d boolForKey:kSettingsRSSIDisplayEnabled];
             BOOL axonLiteEnabled = [d boolForKey:kSettingsAxonLiteEnabled];
-            BOOL typeBannerEnabled = [d boolForKey:kSettingsTypeBannerEnabled];
+            BOOL typeBannerEnabled = settings_typebanner_install_allowed() && [d boolForKey:kSettingsTypeBannerEnabled];
             BOOL themerEnabled = [d boolForKey:kSettingsThemerEnabled];
             BOOL layoutExtrasEnabled = [d boolForKey:kSettingsLayoutExtrasEnabled];
-            BOOL stageStripEnabled = [d boolForKey:kSettingsStageStripEnabled];
+            BOOL stageStripEnabled = settings_stagestrip_install_allowed() && [d boolForKey:kSettingsStageStripEnabled];
             BOOL gravityLiteEnabled = [d boolForKey:kSettingsGravityLiteEnabled];
             BOOL runSBC = settings_enabled_tweak_should_run(d, kSettingsSBCEnabled, springBoardPendingOnly);
             BOOL runDarkTweaks = settings_dark_tweaks_should_run(d, springBoardPendingOnly);
             BOOL runStatBar = settings_enabled_tweak_should_run(d, kSettingsStatBarEnabled, springBoardPendingOnly);
             BOOL runRSSI = settings_rssi_install_allowed() && settings_enabled_tweak_should_run(d, kSettingsRSSIDisplayEnabled, springBoardPendingOnly);
             BOOL runAxonLite = settings_enabled_tweak_should_run(d, kSettingsAxonLiteEnabled, springBoardPendingOnly);
-            BOOL runTypeBanner = settings_enabled_tweak_should_run(d, kSettingsTypeBannerEnabled, springBoardPendingOnly);
+            BOOL runTypeBanner = settings_typebanner_install_allowed() && settings_enabled_tweak_should_run(d, kSettingsTypeBannerEnabled, springBoardPendingOnly);
             BOOL runThemer = settings_enabled_tweak_should_run(d, kSettingsThemerEnabled, springBoardPendingOnly);
             BOOL runLayoutExtras = settings_enabled_tweak_should_run(d, kSettingsLayoutExtrasEnabled, springBoardPendingOnly);
-            BOOL runStageStrip = settings_enabled_tweak_should_run(d, kSettingsStageStripEnabled, springBoardPendingOnly);
+            BOOL runStageStrip = settings_stagestrip_install_allowed() && settings_enabled_tweak_should_run(d, kSettingsStageStripEnabled, springBoardPendingOnly);
             BOOL runGravityLite = settings_enabled_tweak_should_run(d, kSettingsGravityLiteEnabled, springBoardPendingOnly);
             BOOL cleanupDisabledSpringBoardTweaks = settings_disabled_applied_springboard_cleanup_needed(d);
             BOOL needsSpringBoardWork = runSBC || runDarkTweaks || runStatBar || runRSSI || runAxonLite || runGravityLite || runLayoutExtras || runTypeBanner || runThemer || runStageStrip || cleanupDisabledSpringBoardTweaks;
@@ -5415,11 +5466,17 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         @{ @"title": @"Launch Options",     @"icon": @"bolt.fill",                          @"color": [UIColor systemRedColor],    @"section": @(SectionLaunch) },
         @{ @"title": @"SBCustomizer",       @"icon": @"square.grid.3x3.fill",                @"color": [UIColor systemBlueColor],   @"section": @(SectionSBC) },
         @{ @"title": @"StatBar",            @"icon": @"thermometer.medium",                  @"color": [UIColor systemRedColor],    @"section": @(SectionStatBar) },
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
         @{ @"title": @"Signal Display",     @"icon": @"antenna.radiowaves.left.and.right",   @"color": [UIColor systemBlueColor],   @"section": @(SectionRSSI), @"indev": @YES },
+#endif
         @{ @"title": @"Axon Lite",          @"icon": @"bell.badge.fill",                     @"color": [UIColor systemRedColor],    @"section": @(SectionAxonLite) },
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
         @{ @"title": @"TypeBanner",         @"icon": @"ellipsis.bubble.fill",                @"color": [UIColor systemTealColor],   @"section": @(SectionTypeBanner), @"indev": @YES },
+#endif
         @{ @"title": @"Gravity Lite",       @"icon": @"arrow.down.circle.fill",              @"color": [UIColor systemGreenColor],  @"section": @(SectionGravityLite) },
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
         @{ @"title": @"Location Simulator", @"icon": @"location.fill",                       @"color": [UIColor systemGreenColor],  @"section": @(SectionLocationSim), @"experimental": @YES },
+#endif
         @{ @"title": @"Cyanide Themer",     @"icon": @"paintpalette.fill",                   @"color": [UIColor systemPinkColor],   @"section": @(SectionThemer) },
         @{ @"title": @"Powercuff",          @"icon": @"bolt.slash.fill",                     @"color": [UIColor systemOrangeColor], @"section": @(SectionPowercuff) },
         @{ @"title": @"SpringBoard Tweaks", @"icon": @"apps.iphone",                         @"color": [UIColor systemIndigoColor], @"section": @(SectionDarkSwordTweaks) },
@@ -6291,9 +6348,15 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls
     [title appendAttributedString:[NSAttributedString attributedStringWithAttachment:att]];
     cell.textLabel.attributedText = title;
 
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
     cell.detailTextLabel.text = on
         ? @"Active — Signal Readouts, TypeBanner, Location Simulator."
         : @"Signal Readouts, TypeBanner, Location Simulator.";
+#else
+    cell.detailTextLabel.text = on
+        ? @"Active — no private experimental tweaks in this build."
+        : @"No private experimental tweaks in this build.";
+#endif
     cell.detailTextLabel.font = [UIFont systemFontOfSize:13.0];
     cell.detailTextLabel.textColor = on
         ? [UIColor.systemRedColor colorWithAlphaComponent:0.9]
@@ -6369,6 +6432,11 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls
         settings_notify_package_queue_changed_async();
         settings_schedule_live_apply_for_key(kSettingsLocationSimEnabled);
     }
+    if ([d boolForKey:kSettingsStageStripEnabled]) {
+        [d setBool:NO forKey:kSettingsStageStripEnabled];
+        settings_mark_tweak_applied(kSettingsStageStripEnabled, NO);
+        settings_notify_package_queue_changed_async();
+    }
     [self reloadAfterExperimentalChange];
 }
 
@@ -6409,6 +6477,11 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls
         [d setBool:NO forKey:kSettingsLocationSimEnabled];
         settings_notify_package_queue_changed_async();
         settings_schedule_live_apply_for_key(kSettingsLocationSimEnabled);
+    }
+    if ([d boolForKey:kSettingsStageStripEnabled]) {
+        [d setBool:NO forKey:kSettingsStageStripEnabled];
+        settings_mark_tweak_applied(kSettingsStageStripEnabled, NO);
+        settings_notify_package_queue_changed_async();
     }
 }
 

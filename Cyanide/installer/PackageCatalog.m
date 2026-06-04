@@ -6,6 +6,7 @@
 #import "PackageCatalog.h"
 #import "../SettingsViewController.h"
 #import "../PatreonAuth.h"
+#import "../tweaks/private_compat.h"
 
 @implementation PackageCatalog
 
@@ -61,6 +62,7 @@ static const NSInteger kSecGravityLite      = 16;
                                           isNew:NO];
         statBar.settingsSection = kSecStatBar;
 
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
         Package *signal = [[Package alloc] initWithIdentifier:@"com.darksword.rssidisplay"
                                            name:@"Signal Readouts"
                                shortDescription:@"RSRP dBm on cellular, bar count on WiFi"
@@ -76,6 +78,7 @@ static const NSInteger kSecGravityLite      = 16;
         signal.experimental = YES;
         signal.creatorOnly = YES;
         signal.unstableWarning = @"⚠️ In development — may not work at all. The live status-bar refresh interferes with other SpringBoard tweaks and can drop readouts entirely.";
+#endif
 
         Package *sbc = [[Package alloc] initWithIdentifier:@"com.darksword.sbcustomizer"
                                            name:@"SBCustomizer"
@@ -116,6 +119,7 @@ static const NSInteger kSecGravityLite      = 16;
                                           isNew:YES];
         axon.unstableWarning = @"⚠️ Experimental: work-in-progress. Expect SpringBoard crashes, dropped notifications, layout glitches, and breakage between Cyanide builds. Don't rely on it for anything important.";
 
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
         Package *typeBanner = [[Package alloc] initWithIdentifier:@"com.darksword.typebanner"
                                            name:@"TypeBanner"
                                shortDescription:@"iMessage typing banner under the Dynamic Island"
@@ -172,6 +176,7 @@ static const NSInteger kSecGravityLite      = 16;
         locationSim.settingsSection = kSecLocationSim;
         locationSim.experimental = YES;
         locationSim.unstableWarning = @"Requires Apple Maps installed and set up. Changes CoreLocation's active simulation state — may affect time zone, date/time, and other location-tied behavior. Some apps and services prohibit or detect simulated locations. Only use this if you know what you're doing.";
+#endif
 
         Package *themer = [[Package alloc] initWithIdentifier:@"com.darksword.themer"
                                            name:@"Cyanide Themer"
@@ -241,6 +246,7 @@ static const NSInteger kSecGravityLite      = 16;
         nanoRegistry.settingsSection = kSecNanoRegistry;
         nanoRegistry.unstableWarning = @"Warning: modifies a local NanoRegistry MobileAsset. Cyanide saves a .cyanide.bak backup beside the original, but system-file edits can fail or require a respring/reboot. Apply or remove this override at your own risk.";
 
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
         Package *callRecordingSound = [[Package alloc] initWithIdentifier:@"com.darksword.callrecording-sound"
                                            name:@"Call Recording Sound"
                                shortDescription:@"Silence disclosure start/stop sounds"
@@ -254,6 +260,7 @@ static const NSInteger kSecGravityLite      = 16;
                                           isNew:YES];
         callRecordingSound.experimental = YES;
         callRecordingSound.unstableWarning = @"⚠️ Experimental private tweak: persistent CallServices system-file replacement. Disclosure sounds may be legally required where you live; you are responsible for your use and apply this at your own risk. Use Restore Original Sounds before removing Cyanide if you want Cyanide's backups written back.";
+#endif
 
         Package *otaBlock = [[Package alloc] initWithIdentifier:@"com.darksword.ota-block"
                                            name:@"OTA Updates"
@@ -355,15 +362,21 @@ static const NSInteger kSecGravityLite      = 16;
 
             otaBlock,
 
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
             callRecordingSound,
+#endif
 
             // Beta last so the warning sits at the bottom of the Installer.
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
             signal,
+#endif
             axon,
             nanoRegistry,
+#if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
             typeBanner,
             stageStrip,
             locationSim,
+#endif
             themer,
         ];
     });
