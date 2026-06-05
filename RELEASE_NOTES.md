@@ -19,6 +19,10 @@ Avoid vague bullets like "Update settings", "Change project files", or
 
 ## Released
 
+### v1.2.8 - 2026-06-05
+
+- [x] Fixed LiveWP disappearing after leaving Cyanide and aligned NSBar/NiceBar Lite refresh loops with screen wake and sleep state.
+
 ### v1.2.7 - 2026-06-05
 
 - [x] Fixed the Installer queue popup overlapping the bottom tab bar on iOS 18.

@@ -2784,11 +2784,29 @@ static void settings_start_nsbar_live_loop(void)
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         NSUInteger tick = 0;
         NSUInteger failures = 0;
+        BOOL pausedForSleep = NO;
         @try {
             while ([d boolForKey:kSettingsNSBarEnabled] &&
                    !settings_cleanup_in_progress() &&
                    !g_nsbar_live_stop_requested &&
                    tick < kNSBarLiveMaxTicks) {
+                useconds_t intervalUS = settings_live_interval(kNSBarLiveIntervalUS,
+                                                               kNSBarLiveBackgroundIntervalUS);
+                if (!settings_statbar_screen_awake()) {
+                    if (!pausedForSleep) {
+                        pausedForSleep = YES;
+                        printf("[SETTINGS] NSBar paused while screen is asleep\n");
+                    }
+                    settings_live_loop_sleep_interruptible(0,
+                                                           intervalUS,
+                                                           &g_nsbar_live_stop_requested);
+                    continue;
+                }
+                if (pausedForSleep) {
+                    pausedForSleep = NO;
+                    printf("[SETTINGS] NSBar resumed after screen wake\n");
+                }
+
                 bool ok = false;
                 @synchronized (settings_rc_lock()) {
                     if (settings_cleanup_in_progress() ||
@@ -2806,7 +2824,7 @@ static void settings_start_nsbar_live_loop(void)
                 if (failures >= settings_live_failure_limit(3)) break;
                 tick++;
                 settings_live_loop_sleep_interruptible(0,
-                    settings_live_interval(kNSBarLiveIntervalUS, kNSBarLiveBackgroundIntervalUS),
+                    intervalUS,
                     &g_nsbar_live_stop_requested);
             }
         } @finally {
@@ -2829,6 +2847,13 @@ static void settings_apply_nsbar_once_async(const char *reason)
 
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         bool ok = false;
+        (void)settings_refresh_screen_awake_state(reason ?: "nsbar apply");
+        if (!settings_screen_awake_cached()) {
+            printf("[SETTINGS] NSBar lifecycle apply%s%s skipped: screen asleep\n",
+                   reason ? ": " : "", reason ?: "");
+            settings_start_nsbar_live_loop();
+            return;
+        }
         @synchronized (settings_rc_lock()) {
             if (settings_cleanup_in_progress() ||
                 ![d boolForKey:kSettingsNSBarEnabled] ||
@@ -2855,11 +2880,29 @@ static void settings_start_nicebarlite_live_loop(void)
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         NSUInteger tick = 0;
         NSUInteger failures = 0;
+        BOOL pausedForSleep = NO;
         @try {
             while ([d boolForKey:kSettingsNiceBarLiteEnabled] &&
                    !settings_cleanup_in_progress() &&
                    !g_nicebarlite_live_stop_requested &&
                    tick < kNiceBarLiteLiveMaxTicks) {
+                useconds_t intervalUS = settings_live_interval(kNiceBarLiteLiveIntervalUS,
+                                                               kNiceBarLiteLiveBackgroundIntervalUS);
+                if (!settings_statbar_screen_awake()) {
+                    if (!pausedForSleep) {
+                        pausedForSleep = YES;
+                        printf("[SETTINGS] NiceBar Lite paused while screen is asleep\n");
+                    }
+                    settings_live_loop_sleep_interruptible(0,
+                                                           intervalUS,
+                                                           &g_nicebarlite_live_stop_requested);
+                    continue;
+                }
+                if (pausedForSleep) {
+                    pausedForSleep = NO;
+                    printf("[SETTINGS] NiceBar Lite resumed after screen wake\n");
+                }
+
                 bool ok = false;
                 @synchronized (settings_rc_lock()) {
                     if (settings_cleanup_in_progress() ||
@@ -2877,7 +2920,7 @@ static void settings_start_nicebarlite_live_loop(void)
                 if (failures >= settings_live_failure_limit(3)) break;
                 tick++;
                 settings_live_loop_sleep_interruptible(0,
-                    settings_live_interval(kNiceBarLiteLiveIntervalUS, kNiceBarLiteLiveBackgroundIntervalUS),
+                    intervalUS,
                     &g_nicebarlite_live_stop_requested);
             }
         } @finally {
@@ -2900,6 +2943,13 @@ static void settings_apply_nicebarlite_once_async(const char *reason)
 
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         bool ok = false;
+        (void)settings_refresh_screen_awake_state(reason ?: "nicebarlite apply");
+        if (!settings_screen_awake_cached()) {
+            printf("[SETTINGS] NiceBar Lite lifecycle apply%s%s skipped: screen asleep\n",
+                   reason ? ": " : "", reason ?: "");
+            settings_start_nicebarlite_live_loop();
+            return;
+        }
         @synchronized (settings_rc_lock()) {
             if (settings_cleanup_in_progress() ||
                 ![d boolForKey:kSettingsNiceBarLiteEnabled] ||
@@ -2917,7 +2967,8 @@ static void settings_apply_nicebarlite_once_async(const char *reason)
 
 static BOOL settings_livewp_should_play(void)
 {
-    return g_app_in_background == 0 && settings_screen_awake_cached();
+    (void)settings_refresh_screen_awake_state("LiveWP playback check");
+    return settings_screen_awake_cached();
 }
 
 static void settings_start_livewp_live_loop(void)
@@ -2968,11 +3019,13 @@ static void settings_pause_livewp_for_sleep_async(const char *reason)
     if (![d boolForKey:kSettingsLiveWPEnabled] || !g_springboard_rc_ready) return;
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         @synchronized (settings_rc_lock()) {
-            if (g_springboard_rc_ready) {
-                bool ok = livewp_pause_in_session();
-                printf("[SETTINGS] LiveWP pause%s%s result=%d\n",
-                       reason ? ": " : "", reason ?: "", ok);
-            }
+            if (settings_cleanup_in_progress() ||
+                ![d boolForKey:kSettingsLiveWPEnabled] ||
+                !g_springboard_rc_ready) return;
+            if (settings_livewp_should_play()) return;
+            bool ok = livewp_pause_in_session();
+            printf("[SETTINGS] LiveWP pause%s%s result=%d\n",
+                   reason ? ": " : "", reason ?: "", ok);
         }
     });
 }
@@ -2985,10 +3038,15 @@ static void settings_resume_livewp_after_wake_async(const char *reason)
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         bool ok = false;
         @synchronized (settings_rc_lock()) {
-            if (g_springboard_rc_ready && [d boolForKey:kSettingsLiveWPEnabled]) {
-                ok = settings_livewp_should_play() ? livewp_resume_in_session() : livewp_pause_in_session();
-                if (ok) settings_mark_tweak_applied(kSettingsLiveWPEnabled, YES);
+            if (settings_cleanup_in_progress() ||
+                ![d boolForKey:kSettingsLiveWPEnabled] ||
+                !g_springboard_rc_ready) return;
+            if (!settings_livewp_should_play()) {
+                (void)livewp_pause_in_session();
+                return;
             }
+            ok = livewp_resume_in_session();
+            if (ok) settings_mark_tweak_applied(kSettingsLiveWPEnabled, YES);
         }
         printf("[SETTINGS] LiveWP resume%s%s result=%d\n",
                reason ? ": " : "", reason ?: "", ok);
