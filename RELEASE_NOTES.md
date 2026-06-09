@@ -11,8 +11,16 @@ Good bullets describe the behavior users will notice:
 - Fixed installer queue badges after changing package selection.
 - Added an iOS 17 fallback for Disable App Library.
 
+Use one bullet per user-facing tweak or fix. Do not combine unrelated tweak
+changes into the same bullet.
+
 Avoid vague bullets like "Update settings", "Change project files", or
 "Misc fixes".
+
+Never mention private submodule activity, private tweak availability,
+internal/private source movement, private repository names, or private-only
+implementation details in release notes. If a private/internal change is not
+safe to describe as a public user-facing behavior change, omit it.
 
 ## Pending
 
@@ -21,7 +29,6 @@ Avoid vague bullets like "Update settings", "Change project files", or
 
 ### v1.2.14 - 2026-06-09
 
-- [x] Added the private Notification Island tweak to the installer/settings flow and reduced TypeBanner live polling overhead by reusing its imagent RemoteCall session.
 - [x] Fixed Dynamic Stage Lite visibility for paid users.
 - [x] Fixed LiveWP video selection from Files and added Photos video selection.
 - [x] Let active LiveWP users change videos from the installer without deactivating the wallpaper first.
