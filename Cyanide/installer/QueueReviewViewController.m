@@ -220,7 +220,7 @@ typedef NS_ENUM(NSInteger, QueueReviewSection) {
 
 - (void)updateHomeBarWarningHeader
 {
-    if (![self queueIncludesHideHomeBarInstall]) {
+    if (![self queueIncludesHideHomeBar]) {
         self.tableView.tableHeaderView = nil;
         return;
     }
@@ -241,6 +241,8 @@ typedef NS_ENUM(NSInteger, QueueReviewSection) {
 
 - (NSArray<Package *> *)reApplyPackages
 {
+    if ([self queueIncludesHideHomeBar]) return @[];
+
     PackageQueue *q = [PackageQueue sharedQueue];
     NSMutableArray<Package *> *out = [NSMutableArray array];
     for (Package *p in [PackageCatalog allPackages]) {
@@ -263,9 +265,12 @@ typedef NS_ENUM(NSInteger, QueueReviewSection) {
     return @[];
 }
 
-- (BOOL)queueIncludesHideHomeBarInstall
+- (BOOL)queueIncludesHideHomeBar
 {
     for (Package *pkg in [PackageQueue sharedQueue].queuedInstalls) {
+        if (pkg.kind == PackageInstallKindHideHomeBar) return YES;
+    }
+    for (Package *pkg in [PackageQueue sharedQueue].queuedUninstalls) {
         if (pkg.kind == PackageInstallKindHideHomeBar) return YES;
     }
     return NO;
@@ -326,7 +331,7 @@ typedef NS_ENUM(NSInteger, QueueReviewSection) {
 {
     switch ((QueueReviewSection)section) {
         case QueueReviewSectionInstall:
-            if (![self queueIncludesHideHomeBarInstall]) return nil;
+            if (![self queueIncludesHideHomeBar]) return nil;
             return @"Hide Home Bar must run by itself because it edits the system home-indicator asset and then needs a respring. Run it alone first, then apply other tweaks after the respring.";
         case QueueReviewSectionReApply:
             if ([self reApplyPackages].count == 0) return nil;
@@ -463,6 +468,14 @@ typedef NS_ENUM(NSInteger, QueueReviewSection) {
         if (pkg.kind == PackageInstallKindHideHomeBar) {
             includesHideHomeBar = YES;
             break;
+        }
+    }
+    if (!includesHideHomeBar) {
+        for (Package *pkg in [PackageQueue sharedQueue].queuedUninstalls) {
+            if (pkg.kind == PackageInstallKindHideHomeBar) {
+                includesHideHomeBar = YES;
+                break;
+            }
         }
     }
     if (includesHideHomeBar && count > 1) {

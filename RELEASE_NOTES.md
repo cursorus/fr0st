@@ -27,6 +27,12 @@ safe to describe as a public user-facing behavior change, omit it.
 
 ## Released
 
+### v1.2.18 - 2026-06-11
+
+- [x] Tightened Hide Home Bar standalone queue enforcement across all package actions.
+- [x] Added iOS 17 support for Drag Coefficient and lowered its minimum value to 0.01.
+- [x] Replaced Home Layout Extras sliders with exact number entry rows.
+
 ### v1.2.17 - 2026-06-09
 
 - [x] Added Hide Home Bar as a beta package using DirtyZero-style MaterialKit page zeroing.

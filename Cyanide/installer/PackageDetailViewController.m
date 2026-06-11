@@ -635,6 +635,7 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     if ([self isManualPackage]) {
         return;
     } else if (self.package.isInstalled) {
+        if ([self presentQueueConflictIfNeededForIntent:PackageQueueIntentUninstall]) return;
         log_user("[INSTALLER] Pending deactivation: %s\n", self.package.name.UTF8String);
     } else {
         if ([self presentQueueConflictIfNeededForIntent:PackageQueueIntentInstall]) return;

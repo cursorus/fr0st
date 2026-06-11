@@ -34,7 +34,7 @@ cd "$(dirname "$0")/.."
 notify_signal_release() {
     local version="$1"
     local tag="$2"
-    local download_url="$3"
+    local release_url="$3"
     local notes="$4"
     local signal_bot_dir="${SIGNAL_BOT_DIR:-/Users/johnnyfranks/Downloads/signal-bot}"
     local signal_env="${SIGNAL_BOT_ENV:-$signal_bot_dir/.env}"
@@ -52,7 +52,7 @@ notify_signal_release() {
     SIGNAL_BOT_ENV="$signal_env" \
     CYANIDE_VERSION="$version" \
     CYANIDE_TAG="$tag" \
-    CYANIDE_DOWNLOAD_URL="$download_url" \
+    CYANIDE_RELEASE_URL="$release_url" \
     CYANIDE_RELEASE_NOTES="$notes" \
     python3 - <<'PY'
 import base64
@@ -88,7 +88,7 @@ def compact_notes(notes):
         bullets.append(" ".join(notes.split())[:180])
     if not bullets:
         return ""
-    return "\n" + "\n".join(f"• {item[:120]}" for item in bullets)
+    return "\n\n" + "\n".join(f"• {item[:120]}" for item in bullets)
 
 
 env = parse_env(os.environ["SIGNAL_BOT_ENV"])
@@ -102,9 +102,9 @@ if not signal_number or not group_id:
 recipient = "group." + base64.b64encode(group_id.encode()).decode()
 version = os.environ["CYANIDE_VERSION"]
 tag = os.environ["CYANIDE_TAG"]
-download_url = os.environ["CYANIDE_DOWNLOAD_URL"]
+release_url = os.environ["CYANIDE_RELEASE_URL"]
 notes = compact_notes(os.environ.get("CYANIDE_RELEASE_NOTES", ""))
-message = f"Cyanide {version} is out\n{download_url}{notes}"
+message = f"🍏 Cyanide {version} is out\n\nRelease notes + download:\n{release_url}{notes}"
 
 body = {
     "number": signal_number,
@@ -700,8 +700,8 @@ else
         --notes "$NOTES"
 fi
 
-RELEASE_DOWNLOAD_URL="${DOWNLOAD_URL:-https://github.com/${REPO_SLUG}/releases/download/${TAG}/Cyanide-${VERSION}.ipa}"
-notify_signal_release "$VERSION" "$TAG" "$RELEASE_DOWNLOAD_URL" "$NOTES"
+RELEASE_URL="https://github.com/${REPO_SLUG}/releases/tag/${TAG}"
+notify_signal_release "$VERSION" "$TAG" "$RELEASE_URL" "$NOTES"
 
 echo "==> done"
 gh release view "$TAG" --repo "$REPO_SLUG" | head -10

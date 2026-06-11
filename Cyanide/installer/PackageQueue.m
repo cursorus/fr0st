@@ -48,6 +48,14 @@ static BOOL PackageCanQueueInstall(Package *package)
 - (NSArray<Package *> *)queuedInstalls
 {
     NSMutableArray<Package *> *out = [self.installs mutableCopy];
+    if ([self hasExplicitHideHomeBarQueued]) {
+        NSMutableArray<Package *> *onlyHomeBar = [NSMutableArray array];
+        for (Package *p in out) {
+            if (p.kind == PackageInstallKindHideHomeBar) [onlyHomeBar addObject:p];
+        }
+        return onlyHomeBar;
+    }
+
     for (Package *p in [PackageCatalog allPackages]) {
         if (p.isInstallDisabled) continue;
         if (!PackageCanQueueInstall(p)) continue;
@@ -59,12 +67,24 @@ static BOOL PackageCanQueueInstall(Package *package)
     return out;
 }
 
-- (NSArray<Package *> *)queuedUninstalls { return [self.uninstalls copy]; }
+- (NSArray<Package *> *)queuedUninstalls
+{
+    if (![self hasExplicitHideHomeBarQueued]) return [self.uninstalls copy];
+
+    NSMutableArray<Package *> *onlyHomeBar = [NSMutableArray array];
+    for (Package *p in self.uninstalls) {
+        if (p.kind == PackageInstallKindHideHomeBar) [onlyHomeBar addObject:p];
+    }
+    return onlyHomeBar;
+}
 - (NSInteger)pendingCount                { return (NSInteger)(self.queuedInstalls.count + self.queuedUninstalls.count); }
 
 - (PackageQueueIntent)intentForPackage:(Package *)package
 {
     if (package.kind == PackageInstallKindDirectTool) return PackageQueueIntentNone;
+    BOOL hideHomeBarQueued = [self hasExplicitHideHomeBarQueued];
+    BOOL isHideHomeBar = package.kind == PackageInstallKindHideHomeBar;
+    if (hideHomeBarQueued && !isHideHomeBar) return PackageQueueIntentNone;
     if (!package.isInstalled && !PackageCanQueueInstall(package)) return PackageQueueIntentNone;
     if ([self packageInArray:self.installs matching:package])   return PackageQueueIntentInstall;
     if ([self packageInArray:self.uninstalls matching:package]) return PackageQueueIntentUninstall;
@@ -81,6 +101,17 @@ static BOOL PackageCanQueueInstall(Package *package)
     return nil;
 }
 
+- (BOOL)hasExplicitHideHomeBarQueued
+{
+    for (Package *p in self.installs) {
+        if (p.kind == PackageInstallKindHideHomeBar) return YES;
+    }
+    for (Package *p in self.uninstalls) {
+        if (p.kind == PackageInstallKindHideHomeBar) return YES;
+    }
+    return NO;
+}
+
 - (NSInteger)pendingCountExcludingPackage:(Package *)package
 {
     NSInteger count = 0;
@@ -95,9 +126,13 @@ static BOOL PackageCanQueueInstall(Package *package)
     return count;
 }
 
-- (BOOL)hasQueuedHideHomeBarInstallExcludingPackage:(Package *)package
+- (BOOL)hasQueuedHideHomeBarIntentExcludingPackage:(Package *)package
 {
-    for (Package *p in self.queuedInstalls) {
+    for (Package *p in self.installs) {
+        if (package && [p.identifier isEqualToString:package.identifier]) continue;
+        if (p.kind == PackageInstallKindHideHomeBar) return YES;
+    }
+    for (Package *p in self.uninstalls) {
         if (package && [p.identifier isEqualToString:package.identifier]) continue;
         if (p.kind == PackageInstallKindHideHomeBar) return YES;
     }
@@ -110,17 +145,17 @@ static BOOL PackageCanQueueInstall(Package *package)
 {
     if (reason) *reason = nil;
     if (!package) return NO;
-    if (intent != PackageQueueIntentInstall) return YES;
+    if (intent == PackageQueueIntentNone) return YES;
 
-    BOOL installingHideHomeBar = package.kind == PackageInstallKindHideHomeBar;
-    if (installingHideHomeBar && [self pendingCountExcludingPackage:package] > 0) {
+    BOOL isHideHomeBar = package.kind == PackageInstallKindHideHomeBar;
+    if (isHideHomeBar && [self pendingCountExcludingPackage:package] > 0) {
         if (reason) {
-            *reason = @"Hide Home Bar edits the system home-indicator asset and needs a respring right after it applies. Clear the current queue, run Hide Home Bar by itself, respring, then queue your other tweaks.";
+            *reason = @"Hide Home Bar changes the system home-indicator asset and needs a respring right after. Clear the current queue, run Hide Home Bar by itself, respring, then queue your other tweaks.";
         }
         return NO;
     }
 
-    if (!installingHideHomeBar && [self hasQueuedHideHomeBarInstallExcludingPackage:package]) {
+    if (!isHideHomeBar && [self hasQueuedHideHomeBarIntentExcludingPackage:package]) {
         if (reason) {
             *reason = @"Hide Home Bar is already waiting in the queue and must run by itself. Apply or remove Hide Home Bar first, then queue other tweaks after the respring.";
         }

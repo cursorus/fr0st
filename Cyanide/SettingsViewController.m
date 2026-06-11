@@ -45,6 +45,7 @@
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <notify.h>
+#import <float.h>
 #import <math.h>
 #import <sys/sysctl.h>
 #import <sys/utsname.h>
@@ -166,6 +167,63 @@ NSString * const kSettingsLayoutHomeExtraBottom = @"LayoutHomeExtraBottom";
 NSString * const kSettingsLayoutDockExtraHorizontal = @"LayoutDockExtraHorizontal";
 NSString * const kSettingsLayoutHomeScalePct    = @"LayoutHomeScalePct";
 NSString * const kSettingsLayoutDockScalePct    = @"LayoutDockScalePct";
+
+static double settings_number_row_normalized_value(NSDictionary *row, double value)
+{
+    double minV = row[@"min"] ? [row[@"min"] doubleValue] : -DBL_MAX;
+    double maxV = row[@"max"] ? [row[@"max"] doubleValue] : DBL_MAX;
+    if (value < minV) value = minV;
+    if (value > maxV) value = maxV;
+
+    double step = row[@"step"] ? [row[@"step"] doubleValue] : 0.0;
+    if (step > 0.0) {
+        value = round(value / step) * step;
+        if (value < minV) value = minV;
+        if (value > maxV) value = maxV;
+    }
+
+    NSInteger precision = row[@"precision"] ? [row[@"precision"] integerValue] : 0;
+    if (precision <= 0) value = (double)llround(value);
+    return value;
+}
+
+static double settings_drag_coefficient_value(NSUserDefaults *d)
+{
+    id raw = [d objectForKey:kSettingsDSDragCoefficientValue];
+    double value = [raw respondsToSelector:@selector(doubleValue)] ? [raw doubleValue] : 0.5;
+    if (value <= 0.0) value = 0.5;
+
+    // Older Cyanide builds stored this row as an integer percent (50 = 0.50).
+    // New builds store the actual coefficient so typed values can reach 0.01.
+    if (value > 2.0) value /= 100.0;
+
+    NSDictionary *bounds = @{ @"min": @0.01, @"max": @2.0, @"step": @0.01, @"precision": @2 };
+    return settings_number_row_normalized_value(bounds, value);
+}
+
+static double settings_number_row_current_value(NSDictionary *row, NSUserDefaults *d)
+{
+    NSString *key = row[@"key"];
+    if ([key isEqualToString:kSettingsDSDragCoefficientValue]) {
+        return settings_drag_coefficient_value(d);
+    }
+
+    id raw = key.length > 0 ? [d objectForKey:key] : nil;
+    double value = [raw respondsToSelector:@selector(doubleValue)]
+        ? [raw doubleValue]
+        : [row[@"default"] doubleValue];
+    return settings_number_row_normalized_value(row, value);
+}
+
+static NSString *settings_number_row_value_string(NSDictionary *row, double value, BOOL includeUnit)
+{
+    NSInteger precision = row[@"precision"] ? [row[@"precision"] integerValue] : 0;
+    NSString *unit = includeUnit ? (row[@"unit"] ?: @"") : @"";
+    if (precision <= 0) {
+        return [NSString stringWithFormat:@"%ld%@", (long)llround(value), unit];
+    }
+    return [NSString stringWithFormat:@"%.*f%@", (int)precision, value, unit];
+}
 
 NSString * const kSettingsStatBarEnabled = @"StatBarEnabled";
 NSString * const kSettingsStatBarCelsius = @"StatBarCelsius";
@@ -2317,9 +2375,7 @@ static SettingsDarkTweaksResult settings_apply_dark_tweaks_from_defaults_locked(
     }
     if (dragCoefficientEnabled) {
         result.any = true;
-        NSInteger stored = [d integerForKey:kSettingsDSDragCoefficientValue];
-        double coeff = (stored > 0) ? (double)stored / 100.0 : 0.5;
-        result.dragCoefficient = darksword_drag_coefficient_apply(coeff);
+        result.dragCoefficient = darksword_drag_coefficient_apply(settings_drag_coefficient_value(d));
     }
     return result;
 }
@@ -5418,7 +5474,7 @@ void settings_register_defaults(void)
         kSettingsDSDoubleTapToLock:   @NO,
 
         kSettingsDSDragCoefficientEnabled: @NO,
-        kSettingsDSDragCoefficientValue:   @50,
+        kSettingsDSDragCoefficientValue:   @0.5,
 
         kSettingsLayoutExtrasEnabled:       @NO,
         kSettingsLayoutHomeExtraLeft:       @0,
@@ -6911,31 +6967,31 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
 - (NSArray<NSDictionary *> *)dragCoefficientRows
 {
     return @[
-        @{ @"kind": @"slider",
+        @{ @"kind": @"number",
            @"key": kSettingsDSDragCoefficientValue,
            @"title": @"Coefficient",
-           @"subtitle": @"% of stock speed — 100 = default, 50 = 2× faster, 25 = 4× faster",
-           @"min": @5, @"max": @200, @"step": @5,
-           @"unit": @"%", @"default": @50 },
+           @"subtitle": @"1.00 = default, 0.50 = 2× faster, 0.25 = 4× faster. Minimum is 0.01.",
+           @"min": @0.01, @"max": @2.0, @"step": @0.01,
+           @"precision": @2, @"default": @0.5 },
     ];
 }
 
 - (NSArray<NSDictionary *> *)layoutExtrasRows
 {
     return @[
-        @{ @"kind": @"slider", @"key": kSettingsLayoutHomeExtraLeft,
+        @{ @"kind": @"number", @"key": kSettingsLayoutHomeExtraLeft,
            @"title": @"Home extra left",   @"min": @0,  @"max": @300, @"step": @1, @"unit": @"pt", @"default": @0 },
-        @{ @"kind": @"slider", @"key": kSettingsLayoutHomeExtraRight,
+        @{ @"kind": @"number", @"key": kSettingsLayoutHomeExtraRight,
            @"title": @"Home extra right",  @"min": @0,  @"max": @300, @"step": @1, @"unit": @"pt", @"default": @0 },
-        @{ @"kind": @"slider", @"key": kSettingsLayoutHomeExtraTop,
+        @{ @"kind": @"number", @"key": kSettingsLayoutHomeExtraTop,
            @"title": @"Home extra top",    @"min": @0,  @"max": @400, @"step": @1, @"unit": @"pt", @"default": @0 },
-        @{ @"kind": @"slider", @"key": kSettingsLayoutHomeExtraBottom,
+        @{ @"kind": @"number", @"key": kSettingsLayoutHomeExtraBottom,
            @"title": @"Home extra bottom", @"min": @0,  @"max": @400, @"step": @1, @"unit": @"pt", @"default": @0 },
-        @{ @"kind": @"slider", @"key": kSettingsLayoutDockExtraHorizontal,
+        @{ @"kind": @"number", @"key": kSettingsLayoutDockExtraHorizontal,
            @"title": @"Dock extra horizontal", @"min": @0,  @"max": @200, @"step": @1, @"unit": @"pt", @"default": @0 },
-        @{ @"kind": @"slider", @"key": kSettingsLayoutHomeScalePct,
+        @{ @"kind": @"number", @"key": kSettingsLayoutHomeScalePct,
            @"title": @"Home icon scale",   @"min": @25, @"max": @250, @"step": @1, @"unit": @"%", @"default": @100 },
-        @{ @"kind": @"slider", @"key": kSettingsLayoutDockScalePct,
+        @{ @"kind": @"number", @"key": kSettingsLayoutDockScalePct,
            @"title": @"Dock icon scale",   @"min": @25, @"max": @250, @"step": @1, @"unit": @"%", @"default": @100 },
     ];
 }
@@ -7336,8 +7392,8 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         NSString *lvl = [d stringForKey:kSettingsPowercuffLevel] ?: @"nominal";
         [out addObject:@{@"title": @"Level", @"value": lvl}];
     } else if (section == SectionDragCoefficient) {
-        NSInteger v = [d integerForKey:kSettingsDSDragCoefficientValue];
-        [out addObject:@{@"title": @"Coefficient", @"value": [NSString stringWithFormat:@"%ld%%", (long)v]}];
+        double v = settings_drag_coefficient_value(d);
+        [out addObject:@{@"title": @"Coefficient", @"value": [NSString stringWithFormat:@"%.2f", v]}];
     } else if (section == SectionNanoRegistry) {
         [out addObject:@{@"title": @"watchOS limit",      @"value": [@([d integerForKey:kSettingsNanoMaxPairing])       stringValue]}];
         [out addObject:@{@"title": @"Setup floor",        @"value": [@([d integerForKey:kSettingsNanoMinPairing])       stringValue]}];
@@ -7579,7 +7635,7 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         return @"Imported from DarkSword-Tweaks. These are SpringBoard runtime patches; turning one off only skips future applies.";
     }
     if (s == SectionDragCoefficient) {
-        return @"Overrides _UIAnimationDragCoefficient in SpringBoard. 50% = 2× faster (value 0.5), 25% = 4× faster (value 0.25), 100% = stock. Imported from kolbicz/DarkSword-Tweaks.";
+        return @"Overrides _UIAnimationDragCoefficient in SpringBoard. Type the raw coefficient: 1.00 = stock, 0.50 = 2× faster, 0.25 = 4× faster, minimum 0.01. Imported from kolbicz/DarkSword-Tweaks.";
     }
     if (s == SectionLayoutExtras) {
         NSInteger major = [[NSProcessInfo processInfo] operatingSystemVersion].majorVersion;
@@ -9848,6 +9904,29 @@ void cyanide_present_contact(UIViewController *host)
         return cell;
     }
 
+    if ([kind isEqualToString:@"number"]) {
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"number"];
+        if (!cell) {
+            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"number"];
+            cell.detailTextLabel.numberOfLines = 0;
+        }
+        cell.selectionStyle = supported ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
+        cell.userInteractionEnabled = supported;
+        cell.accessoryType = supported ? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
+        cell.accessoryView = nil;
+        cell.contentConfiguration = nil;
+
+        double value = settings_number_row_current_value(row, d);
+        NSString *valueText = settings_number_row_value_string(row, value, YES);
+        cell.textLabel.text = [NSString stringWithFormat:@"%@: %@", row[@"title"], valueText];
+        cell.textLabel.textAlignment = NSTextAlignmentNatural;
+        cell.textLabel.textColor = supported ? UIColor.labelColor : UIColor.tertiaryLabelColor;
+        cell.detailTextLabel.text = row[@"subtitle"] ?: @"Tap to enter an exact value.";
+        cell.detailTextLabel.textColor = supported ? UIColor.secondaryLabelColor : UIColor.tertiaryLabelColor;
+        cell.detailTextLabel.font = [UIFont systemFontOfSize:12];
+        return cell;
+    }
+
     if ([kind isEqualToString:@"slider"]) {
         UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"slider" forIndexPath:dequeuePath];
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -10071,6 +10150,86 @@ void cyanide_present_contact(UIViewController *host)
     if (settings_key_is_location_sim(key)) {
         [self.tableView reloadData];
     }
+}
+
+- (void)presentNumberEntryForRow:(NSDictionary *)row section:(NSInteger)section
+{
+    NSString *key = row[@"key"];
+    if (key.length == 0) return;
+
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    double current = settings_number_row_current_value(row, d);
+    NSString *minText = settings_number_row_value_string(row, [row[@"min"] doubleValue], YES);
+    NSString *maxText = settings_number_row_value_string(row, [row[@"max"] doubleValue], YES);
+    NSString *message = [NSString stringWithFormat:@"Enter %@ to %@.%@%@",
+                         minText,
+                         maxText,
+                         [row[@"subtitle"] length] > 0 ? @"\n\n" : @"",
+                         row[@"subtitle"] ?: @""];
+
+    UIAlertController *ac = [UIAlertController
+        alertControllerWithTitle:row[@"title"]
+                         message:message
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [ac addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = settings_number_row_value_string(row, current, NO);
+        field.placeholder = settings_number_row_value_string(row, [row[@"default"] doubleValue], NO);
+        field.keyboardType = (row[@"precision"] && [row[@"precision"] integerValue] > 0)
+            ? UIKeyboardTypeDecimalPad
+            : UIKeyboardTypeNumberPad;
+        field.clearButtonMode = UITextFieldViewModeWhileEditing;
+        [field selectAll:nil];
+    }];
+
+    __weak typeof(self) weakSelf = self;
+    [ac addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [ac addAction:[UIAlertAction actionWithTitle:@"Save"
+                                           style:UIAlertActionStyleDefault
+                                         handler:^(__unused UIAlertAction *action) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+
+        NSString *input = ac.textFields.firstObject.text ?: @"";
+        NSString *trimmed = [input stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        NSString *normalizedInput = [trimmed stringByReplacingOccurrencesOfString:@"," withString:@"."];
+        NSScanner *scanner = [NSScanner scannerWithString:normalizedInput];
+        scanner.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+
+        double parsed = 0.0;
+        BOOL ok = [scanner scanDouble:&parsed];
+        [scanner scanCharactersFromSet:NSCharacterSet.whitespaceAndNewlineCharacterSet intoString:NULL];
+        if (!ok || ![scanner isAtEnd] || !isfinite(parsed)) {
+            UIAlertController *err = [UIAlertController
+                alertControllerWithTitle:@"Invalid Number"
+                                 message:@"Enter a plain number, then try again."
+                          preferredStyle:UIAlertControllerStyleAlert];
+            [err addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(250 * NSEC_PER_MSEC)),
+                           dispatch_get_main_queue(), ^{
+                settings_present_controller(err, strongSelf);
+            });
+            return;
+        }
+
+        double value = settings_number_row_normalized_value(row, parsed);
+        if ([key isEqualToString:kSettingsDSDragCoefficientValue] ||
+            (row[@"precision"] && [row[@"precision"] integerValue] > 0)) {
+            [d setDouble:value forKey:key];
+        } else {
+            [d setInteger:(NSInteger)llround(value) forKey:key];
+        }
+        [d synchronize];
+
+        NSString *valueText = settings_number_row_value_string(row, value, YES);
+        printf("[SETTINGS] number %s=%s\n", key.UTF8String, valueText.UTF8String);
+        settings_schedule_live_apply_for_key(key);
+        [strongSelf reloadSectionOrAll:section];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(250 * NSEC_PER_MSEC)),
+                       dispatch_get_main_queue(), ^{
+            [strongSelf presentApplyLogIfRunning];
+        });
+    }]];
+    settings_present_controller(ac, self);
 }
 
 - (void)reloadLocationSimUI
@@ -11037,6 +11196,15 @@ void cyanide_present_contact(UIViewController *host)
         indexPath.section != SectionThemer) {
         printf("[SETTINGS] tap blocked: %s\n", settings_unsupported_message().UTF8String);
         return;
+    }
+
+    NSArray<NSDictionary *> *rows = [self rowsForSection:indexPath.section];
+    if (indexPath.row < (NSInteger)rows.count) {
+        NSDictionary *row = rows[indexPath.row];
+        if ([row[@"kind"] isEqualToString:@"number"]) {
+            [self presentNumberEntryForRow:row section:indexPath.section];
+            return;
+        }
     }
 
     if (indexPath.section == SectionActions) {

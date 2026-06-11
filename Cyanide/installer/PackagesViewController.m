@@ -767,6 +767,10 @@ static NSString * const kGitHubIssuesURL        = @"https://github.com/zeroxjf/c
             contextualActionWithStyle:UIContextualActionStyleNormal
                                 title:@"Enable"
                               handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            if ([self presentQueueConflictIfNeededForPackage:pkg intent:PackageQueueIntentUninstall]) {
+                done(YES);
+                return;
+            }
             [q queueIntent:PackageQueueIntentUninstall forPackage:pkg];
             done(YES);
         }];
@@ -797,6 +801,10 @@ static NSString * const kGitHubIssuesURL        = @"https://github.com/zeroxjf/c
             contextualActionWithStyle:UIContextualActionStyleDestructive
                                 title:@"Remove"
                               handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            if ([self presentQueueConflictIfNeededForPackage:pkg intent:PackageQueueIntentUninstall]) {
+                done(YES);
+                return;
+            }
             [q queueIntent:PackageQueueIntentUninstall forPackage:pkg];
             done(YES);
         }];
@@ -826,6 +834,10 @@ static NSString * const kGitHubIssuesURL        = @"https://github.com/zeroxjf/c
             contextualActionWithStyle:UIContextualActionStyleNormal
                                 title:@"Restore"
                               handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            if ([self presentQueueConflictIfNeededForPackage:pkg intent:PackageQueueIntentUninstall]) {
+                done(YES);
+                return;
+            }
             [q queueIntent:PackageQueueIntentUninstall forPackage:pkg];
             done(YES);
         }];
@@ -855,6 +867,10 @@ static NSString * const kGitHubIssuesURL        = @"https://github.com/zeroxjf/c
             contextualActionWithStyle:UIContextualActionStyleNormal
                                 title:@"Restore"
                               handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            if ([self presentQueueConflictIfNeededForPackage:pkg intent:PackageQueueIntentUninstall]) {
+                done(YES);
+                return;
+            }
             [q queueIntent:PackageQueueIntentUninstall forPackage:pkg];
             done(YES);
         }];
@@ -896,6 +912,7 @@ static NSString * const kGitHubIssuesURL        = @"https://github.com/zeroxjf/c
                             title:title
                           handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
         BOOL isInstall = (intent == PackageQueueIntentNone && !pkg.isInstalled);
+        BOOL isUninstall = (intent == PackageQueueIntentNone && pkg.isInstalled);
         if (NO && isInstall && pkg.settingsSection != NSIntegerMax) {
             done(YES);
             [self presentConfigureAlertForPackage:pkg];
@@ -912,6 +929,10 @@ static NSString * const kGitHubIssuesURL        = @"https://github.com/zeroxjf/c
             return;
         }
         if (isInstall && [self presentQueueConflictIfNeededForPackage:pkg intent:PackageQueueIntentInstall]) {
+            done(YES);
+            return;
+        }
+        if (isUninstall && [self presentQueueConflictIfNeededForPackage:pkg intent:PackageQueueIntentUninstall]) {
             done(YES);
             return;
         }
