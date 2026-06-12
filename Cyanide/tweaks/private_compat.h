@@ -86,6 +86,11 @@ static inline bool stagestrip_apply_in_session(int maxSlots)
     return false;
 }
 
+static inline void stagestrip_set_deferred_library_build_enabled(bool enabled)
+{
+    (void)enabled;
+}
+
 static inline bool stagestrip_stop_in_session(void)
 {
     return false;
@@ -277,6 +282,18 @@ static inline bool fastlockx_lite_run_in_session(FastLockXLiteConfig config)
 static inline bool fastlockx_lite_enable_always_on_in_session(FastLockXLiteConfig config)
 {
     (void)config;
+    return false;
+}
+
+static inline bool fastlockx_lite_set_always_on_active_in_session(bool active)
+{
+    (void)active;
+    return false;
+}
+
+static inline bool fastlockx_lite_attempt_unlock_in_session(bool diagnosticLogging)
+{
+    (void)diagnosticLogging;
     return false;
 }
 

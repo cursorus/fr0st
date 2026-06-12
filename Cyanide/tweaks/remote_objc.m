@@ -23,6 +23,7 @@ typedef struct {
 } RemoteObjCCacheEntry;
 
 static pthread_mutex_t gObjCCacheLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t gRemoteCallLock = PTHREAD_MUTEX_INITIALIZER;
 static RemoteObjCCacheEntry gSelCache[R_OBJC_CACHE_CAP];
 static RemoteObjCCacheEntry gClassCache[R_OBJC_CACHE_CAP];
 static int gSelCacheNext = 0;
@@ -86,6 +87,18 @@ static void r_settle(void)
     if (gSettleUS) usleep(gSettleUS);
 }
 
+static uint64_t r_call_stable(int timeout, const char *fnName,
+                              uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3,
+                              uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7)
+{
+    pthread_mutex_lock(&gRemoteCallLock);
+    uint64_t ret = do_remote_call_stable(timeout, fnName,
+                                         a0, a1, a2, a3,
+                                         a4, a5, a6, a7);
+    pthread_mutex_unlock(&gRemoteCallLock);
+    return ret;
+}
+
 uint32_t r_settle_us(uint32_t usec)
 {
     uint32_t old = (uint32_t)gSettleUS;
@@ -102,14 +115,14 @@ uint64_t r_dlsym_call(int timeout, const char *fnName,
                       uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3,
                       uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7)
 {
-    return do_remote_call_stable(timeout, fnName, a0, a1, a2, a3, a4, a5, a6, a7);
+    return r_call_stable(timeout, fnName, a0, a1, a2, a3, a4, a5, a6, a7);
 }
 
 uint64_t r_alloc_str(const char *s)
 {
     if (!s) return 0;
     uint64_t len = strlen(s) + 1;
-    uint64_t buf = do_remote_call_stable(R_TIMEOUT, "malloc", len, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t buf = r_call_stable(R_TIMEOUT, "malloc", len, 0, 0, 0, 0, 0, 0, 0);
     if (buf) remote_writeStr(buf, s);
     return buf;
 }
@@ -117,7 +130,7 @@ uint64_t r_alloc_str(const char *s)
 void r_free(uint64_t ptr)
 {
     if (!ptr) return;
-    do_remote_call_stable(R_TIMEOUT, "free", ptr, 0, 0, 0, 0, 0, 0, 0);
+    r_call_stable(R_TIMEOUT, "free", ptr, 0, 0, 0, 0, 0, 0, 0);
 }
 
 uint64_t r_sel(const char *name)
@@ -128,7 +141,7 @@ uint64_t r_sel(const char *name)
 
     uint64_t s = r_alloc_str(name);
     if (!s) return 0;
-    uint64_t sel = do_remote_call_stable(R_TIMEOUT, "sel_registerName", s, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t sel = r_call_stable(R_TIMEOUT, "sel_registerName", s, 0, 0, 0, 0, 0, 0, 0);
     r_free(s);
     r_cache_store(gSelCache, &gSelCacheNext, pid, name, sel);
     return sel;
@@ -142,7 +155,7 @@ uint64_t r_class(const char *name)
 
     uint64_t s = r_alloc_str(name);
     if (!s) return 0;
-    uint64_t c = do_remote_call_stable(R_TIMEOUT, "objc_getClass", s, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t c = r_call_stable(R_TIMEOUT, "objc_getClass", s, 0, 0, 0, 0, 0, 0, 0);
     r_free(s);
     r_cache_store(gClassCache, &gClassCacheNext, pid, name, c);
     return c;
@@ -152,8 +165,8 @@ uint64_t r_msg(uint64_t obj, uint64_t sel,
                uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3)
 {
     if (!obj || !sel) return 0;
-    return do_remote_call_stable(R_TIMEOUT, "objc_msgSend",
-                                 obj, sel, a0, a1, a2, a3, 0, 0);
+    return r_call_stable(R_TIMEOUT, "objc_msgSend",
+                         obj, sel, a0, a1, a2, a3, 0, 0);
 }
 
 uint64_t r_msg2(uint64_t obj, const char *selName,
@@ -174,16 +187,16 @@ static uint64_t r_method_signature(uint64_t obj, uint64_t sel)
     uint64_t sig = r_msg(obj, sigSel, sel, 0, 0, 0);
     if (r_is_objc_ptr(sig)) return sig;
 
-    uint64_t cls = do_remote_call_stable(R_TIMEOUT, "object_getClass",
-                                         obj, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t cls = r_call_stable(R_TIMEOUT, "object_getClass",
+                                 obj, 0, 0, 0, 0, 0, 0, 0);
     if (!r_is_objc_ptr(cls)) return 0;
 
-    uint64_t method = do_remote_call_stable(R_TIMEOUT, "class_getInstanceMethod",
-                                            cls, sel, 0, 0, 0, 0, 0, 0);
+    uint64_t method = r_call_stable(R_TIMEOUT, "class_getInstanceMethod",
+                                    cls, sel, 0, 0, 0, 0, 0, 0);
     if (!method) return 0;
 
-    uint64_t types = do_remote_call_stable(R_TIMEOUT, "method_getTypeEncoding",
-                                           method, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t types = r_call_stable(R_TIMEOUT, "method_getTypeEncoding",
+                                   method, 0, 0, 0, 0, 0, 0, 0);
     if (!types) return 0;
 
     uint64_t NSMethodSignature = r_class("NSMethodSignature");
@@ -246,8 +259,8 @@ uint64_t r_msg_main_raw(uint64_t obj, uint64_t sel,
     size_t argSizes[4] = { a0Size, a1Size, a2Size, a3Size };
     for (uint64_t i = 0; i < maxUserArgs; i++) {
         size_t argBufLen = (argSizes[i] > 8) ? argSizes[i] : 8;
-        uint64_t argBuf = do_remote_call_stable(R_TIMEOUT, "malloc",
-                                                argBufLen, 0, 0, 0, 0, 0, 0, 0);
+        uint64_t argBuf = r_call_stable(R_TIMEOUT, "malloc",
+                                        argBufLen, 0, 0, 0, 0, 0, 0, 0);
         if (!argBuf) {
             argsOK = false;
             continue;
@@ -279,8 +292,8 @@ uint64_t r_msg_main_raw(uint64_t obj, uint64_t sel,
     uint64_t retLen = r_msg2(sig, "methodReturnLength", 0, 0, 0, 0);
     if (retLen > 0) {
         uint64_t retBufLen = (retLen > 8) ? retLen : 8;
-        uint64_t retBuf = do_remote_call_stable(R_TIMEOUT, "malloc",
-                                                retBufLen, 0, 0, 0, 0, 0, 0, 0);
+        uint64_t retBuf = r_call_stable(R_TIMEOUT, "malloc",
+                                        retBufLen, 0, 0, 0, 0, 0, 0, 0);
         if (retBuf) {
             remote_write64(retBuf, 0);
             r_msg2(inv, "getReturnValue:", retBuf, 0, 0, 0);
@@ -348,8 +361,8 @@ void r_msg2_main_async(uint64_t obj, const char *selName,
     bool argsOK = true;
     uint64_t userArgs[4] = { a0, a1, a2, a3 };
     for (uint64_t i = 0; i < maxUserArgs; i++) {
-        uint64_t argBuf = do_remote_call_stable(R_TIMEOUT, "malloc",
-                                                8, 0, 0, 0, 0, 0, 0, 0);
+        uint64_t argBuf = r_call_stable(R_TIMEOUT, "malloc",
+                                        8, 0, 0, 0, 0, 0, 0, 0);
         if (!argBuf) {
             argsOK = false;
             continue;
@@ -423,8 +436,8 @@ bool r_msg2_main_struct_ret(uint64_t obj, const char *selName,
     size_t argSizes[4] = { a0Size, a1Size, a2Size, a3Size };
     for (uint64_t i = 0; i < maxUserArgs; i++) {
         size_t argBufLen = (argSizes[i] > 8) ? argSizes[i] : 8;
-        uint64_t argBuf = do_remote_call_stable(R_TIMEOUT, "malloc",
-                                                argBufLen, 0, 0, 0, 0, 0, 0, 0);
+        uint64_t argBuf = r_call_stable(R_TIMEOUT, "malloc",
+                                        argBufLen, 0, 0, 0, 0, 0, 0, 0);
         if (!argBuf) {
             argsOK = false;
             continue;
@@ -455,8 +468,8 @@ bool r_msg2_main_struct_ret(uint64_t obj, const char *selName,
     bool ok = false;
     uint64_t retLen = r_msg2(sig, "methodReturnLength", 0, 0, 0, 0);
     if (retLen >= outSize) {
-        uint64_t retBuf = do_remote_call_stable(R_TIMEOUT, "malloc",
-                                                retLen, 0, 0, 0, 0, 0, 0, 0);
+        uint64_t retBuf = r_call_stable(R_TIMEOUT, "malloc",
+                                        retLen, 0, 0, 0, 0, 0, 0, 0);
         if (retBuf) {
             r_msg2(inv, "getReturnValue:", retBuf, 0, 0, 0);
             ok = remote_read(retBuf, outBuf, outSize);
@@ -482,8 +495,8 @@ uint64_t r_cfstr(const char *s)
     uint64_t buf = r_alloc_str(s);
     if (!buf) return 0;
     // CFStringCreateWithCString(alloc=NULL, cstr, encoding=kCFStringEncodingUTF8=0x08000100)
-    uint64_t cf = do_remote_call_stable(R_TIMEOUT, "CFStringCreateWithCString",
-                                        0, buf, 0x08000100, 0, 0, 0, 0, 0);
+    uint64_t cf = r_call_stable(R_TIMEOUT, "CFStringCreateWithCString",
+                                0, buf, 0x08000100, 0, 0, 0, 0, 0);
     r_free(buf);
     return cf;
 }
@@ -529,16 +542,16 @@ bool r_responds_main(uint64_t obj, const char *selName)
 uint64_t r_ivar_value(uint64_t obj, const char *ivarName)
 {
     if (!r_is_objc_ptr(obj)) return 0;
-    uint64_t cls = do_remote_call_stable(R_TIMEOUT, "object_getClass", obj, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t cls = r_call_stable(R_TIMEOUT, "object_getClass", obj, 0, 0, 0, 0, 0, 0, 0);
     if (!cls) return 0;
     uint64_t nameBuf = r_alloc_str(ivarName);
     if (!nameBuf) return 0;
-    uint64_t ivar = do_remote_call_stable(R_TIMEOUT, "class_getInstanceVariable",
-                                          cls, nameBuf, 0, 0, 0, 0, 0, 0);
+    uint64_t ivar = r_call_stable(R_TIMEOUT, "class_getInstanceVariable",
+                                  cls, nameBuf, 0, 0, 0, 0, 0, 0);
     r_free(nameBuf);
     if (!ivar) return 0;
-    uint64_t offset = do_remote_call_stable(R_TIMEOUT, "ivar_getOffset",
-                                            ivar, 0, 0, 0, 0, 0, 0, 0);
+    uint64_t offset = r_call_stable(R_TIMEOUT, "ivar_getOffset",
+                                    ivar, 0, 0, 0, 0, 0, 0, 0);
     return remote_read64(obj + offset);
 }
 

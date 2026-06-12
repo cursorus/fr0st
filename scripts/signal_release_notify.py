@@ -38,13 +38,20 @@ def compact_notes(notes):
         item = re.sub(r"^\s*[-*]\s+", "", line).strip()
         if item:
             bullets.append(item)
-        if len(bullets) >= 3:
-            break
     if not bullets and notes.strip():
-        bullets.append(" ".join(notes.split())[:180])
+        bullets.append(" ".join(notes.split()))
     if not bullets:
         return ""
-    return "\n\n" + "\n".join(f"• {item[:120]}" for item in bullets)
+
+    body = "\n".join(f"• {item}" for item in bullets)
+    try:
+        max_chars = int(os.environ.get("SIGNAL_RELEASE_NOTES_MAX_CHARS", "2500"))
+    except ValueError:
+        max_chars = 2500
+    if max_chars > 0 and len(body) > max_chars:
+        body = body[:max_chars].rstrip()
+        body += "\n• …more details in the GitHub release"
+    return "\n\n" + body
 
 
 def main():
