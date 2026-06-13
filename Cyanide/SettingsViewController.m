@@ -580,13 +580,13 @@ static uint64_t settings_now_ms(void)
     return ((uint64_t)tv.tv_sec * 1000ULL) + ((uint64_t)tv.tv_usec / 1000ULL);
 }
 
-static void settings_maybe_nudge_fastlockx_lite_awake_locked(const char *why,
+static BOOL settings_maybe_nudge_fastlockx_lite_awake_locked(const char *why,
                                                              BOOL awake,
                                                              BOOL locked)
 {
     if (!awake || !locked) {
         __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
-        return;
+        return NO;
     }
 
     uint64_t now = settings_now_ms();
@@ -601,7 +601,9 @@ static void settings_maybe_nudge_fastlockx_lite_awake_locked(const char *why,
                nudgeOK,
                awake,
                locked);
+        return YES;
     }
+    return NO;
 }
 
 static bool settings_stop_fastlockx_lite_registered(BOOL springboardWillDie)
@@ -1094,7 +1096,10 @@ static void settings_sync_fastlockx_lite_for_screen_state_async(const char *reas
     const char *why = reason ? reason : "screen state";
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        usleep(80000); // let SpringBoard's display/lock notify states settle
+        // 200ms settle: FLX-induced brief wakes (~150ms from noteScreenWillTurnOn)
+        // go dark before this fires, so they don't cause spurious active=0
+        // transitions or rc_lock grabs on every timer cycle.
+        usleep(200000);
         if (settings_cleanup_in_progress()) return;
         @synchronized (settings_rc_lock()) {
             if (settings_cleanup_in_progress() ||
@@ -1120,7 +1125,7 @@ static void settings_sync_fastlockx_lite_for_screen_state_async(const char *reas
             }
             int lastState = g_fastlockx_lite_remote_active_state;
             if (lastState == desiredState) {
-                settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
+                (void)settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
                 printf("[SETTINGS] FastLockX screen sync unchanged reason=%s active=%d awake=%d locked=%d\n",
                        why,
                        active,
@@ -1128,11 +1133,22 @@ static void settings_sync_fastlockx_lite_for_screen_state_async(const char *reas
                        locked);
                 return;
             }
+            BOOL nudgeBeforePausing = (lastState == 1 && desiredState == 0 && awake && locked);
+            BOOL nudged = NO;
+            if (nudgeBeforePausing) {
+                // The FLX retry pulse creates a short awake+locked window. Send
+                // the host unlock sequence while that window is still alive,
+                // then pause timers so the next off-pulse cannot interrupt the
+                // unlock finisher.
+                nudged = settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
+            }
             bool ok = fastlockx_lite_set_always_on_active_in_session(active);
             __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state,
                                      ok ? desiredState : -1);
             if (ok) {
-                settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
+                if (!nudged) {
+                    (void)settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
+                }
             } else {
                 __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
             }
@@ -2597,6 +2613,17 @@ static FastLockXLiteConfig settings_fastlockx_lite_config_from_defaults(NSUserDe
         .diagnosticLogging = YES,
         .retryIntervalSeconds = settings_fastlockx_lite_retry_interval(d),
     };
+    return config;
+}
+
+static FastLockXLiteConfig settings_fastlockx_lite_always_on_config_from_defaults(NSUserDefaults *d)
+{
+    // Keep SpringBoard's resident timers responsible only for the Face ID retry
+    // pulse. The app-side awake+locked nudge sends the actual unlock request
+    // after the display state settles, avoiding a cancel race when sync pauses
+    // timers as the screen wakes.
+    FastLockXLiteConfig config = settings_fastlockx_lite_config_from_defaults(d, YES, NO);
+    config.diagnosticLogging = NO;
     return config;
 }
 
@@ -6293,8 +6320,7 @@ static void settings_run_actions_internal(BOOL pendingOnly)
 
                     if (runFastLockXLite) {
                         settings_progress(&step, total, "Enabling FastLockX Lite Always On");
-                        FastLockXLiteConfig config = settings_fastlockx_lite_config_from_defaults(d, YES, YES);
-                        config.diagnosticLogging = NO;
+                        FastLockXLiteConfig config = settings_fastlockx_lite_always_on_config_from_defaults(d);
                         bool ok = fastlockx_lite_enable_always_on_in_session(config);
                         if (ok) {
                             (void)settings_refresh_screen_awake_state("fastlockx install");
@@ -12074,8 +12100,7 @@ void cyanide_present_contact(UIViewController *host)
                     } else if (enableAlways) {
                         [d setBool:YES forKey:kSettingsFastLockXLiteEnabled];
                         [d synchronize];
-                        FastLockXLiteConfig config = settings_fastlockx_lite_config_from_defaults(d, YES, YES);
-                        config.diagnosticLogging = NO;
+                        FastLockXLiteConfig config = settings_fastlockx_lite_always_on_config_from_defaults(d);
                         bool ok = fastlockx_lite_enable_always_on_in_session(config);
                         if (ok) {
                             (void)settings_refresh_screen_awake_state("fastlockx direct enable");

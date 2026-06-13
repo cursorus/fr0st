@@ -12,6 +12,8 @@
 
 static NSString * const kCallRecordingDisclosureAcceptedDefault =
     @"installer.callRecordingSoundDisclosureAccepted";
+static NSString * const kFastLockXLitePackageIdentifier =
+    @"com.darksword.fastlockx-lite";
 
 typedef NS_ENUM(NSInteger, PackageDetailSection) {
     PackageDetailSectionWarning = 0,
@@ -53,6 +55,36 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
                                               style:UIAlertActionStyleDestructive
                                             handler:^(UIAlertAction *_) {
         [d setBool:YES forKey:kCallRecordingDisclosureAcceptedDefault];
+        if (confirmHandler) confirmHandler();
+    }]];
+    [presenter presentViewController:alert animated:YES completion:nil];
+}
+
++ (BOOL)isFastLockXLitePackage:(Package *)package
+{
+    return [package.identifier isEqualToString:kFastLockXLitePackageIdentifier];
+}
+
++ (void)presentFastLockXLiteStackingWarningFromViewController:(UIViewController *)presenter
+                                                      package:(Package *)package
+                                               confirmHandler:(dispatch_block_t)confirmHandler
+{
+    if (![self isFastLockXLitePackage:package]) {
+        if (confirmHandler) confirmHandler();
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"FastLockX Lite Warning"
+                                            message:@"FastLockX Lite is currently unstable when stacked with other persistent RemoteCall tweaks, especially Dynamic Stage Lite. For now, install it by itself and avoid pairing it with other always-on or live RemoteCall tweaks."
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Install Anyway"
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *_) {
         if (confirmHandler) confirmHandler();
     }]];
     [presenter presentViewController:alert animated:YES completion:nil];
@@ -637,11 +669,17 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     } else if (self.package.isInstalled) {
         if ([self presentQueueConflictIfNeededForIntent:PackageQueueIntentUninstall]) return;
         log_user("[INSTALLER] Pending deactivation: %s\n", self.package.name.UTF8String);
+        [[PackageQueue sharedQueue] toggleForPackage:self.package];
     } else {
         if ([self presentQueueConflictIfNeededForIntent:PackageQueueIntentInstall]) return;
-        log_user("[INSTALLER] Pending activation: %s\n", self.package.name.UTF8String);
+        [PackageDetailViewController
+            presentFastLockXLiteStackingWarningFromViewController:self
+                                                          package:self.package
+                                                   confirmHandler:^{
+            log_user("[INSTALLER] Pending activation: %s\n", self.package.name.UTF8String);
+            [[PackageQueue sharedQueue] toggleForPackage:self.package];
+        }];
     }
-    [[PackageQueue sharedQueue] toggleForPackage:self.package];
 }
 
 - (void)promptSelectThemeBeforeInstall

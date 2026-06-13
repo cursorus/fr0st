@@ -1642,15 +1642,15 @@ static int themer_iter_iconviews(uint64_t listView,
 
     if (n == 0) {
         if (gThemerLogBudget > 0) {
-            uint64_t subs = r_msg2(listView, "subviews", 0, 0, 0, 0);
-            uint64_t sc = r_is_objc_ptr(subs) ? r_msg2(subs, "count", 0, 0, 0, 0) : 0;
+            uint64_t subs = r_msg2_main(listView, "subviews", 0, 0, 0, 0);
+            uint64_t sc = r_is_objc_ptr(subs) ? r_msg2_main(subs, "count", 0, 0, 0, 0) : 0;
             char lvCls[96];
             themer_read_class_name(listView, lvCls, sizeof(lvCls));
             printf("[THEMER] listView=0x%llx class=%s no iconViews; direct subviews=%llu\n",
                    (unsigned long long)listView, lvCls, (unsigned long long)sc);
             uint64_t cap = sc > 6 ? 6 : sc;
             for (uint64_t i = 0; i < cap; i++) {
-                uint64_t child = r_msg2(subs, "objectAtIndex:", i, 0, 0, 0);
+                uint64_t child = r_msg2_main(subs, "objectAtIndex:", i, 0, 0, 0);
                 char cls[96] = {0};
                 themer_read_class_name(child, cls, sizeof(cls));
                 printf("[THEMER]   subview[%llu]=0x%llx class=%s\n",

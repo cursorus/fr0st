@@ -339,7 +339,7 @@ static const NSInteger kSecFastLockXLite    = 24;
                                           isNew:YES];
         fastLockXLite.settingsSection = kSecFastLockXLite;
         fastLockXLite.experimental = YES;
-        fastLockXLite.unstableWarning = @"Experimental: sends private SpringBoard lock-screen and biometric-resource messages. Always On runs SpringBoard timers while the device is locked, so disable it or respring if Face ID feels noisy or unstable.";
+        fastLockXLite.unstableWarning = @"Experimental: sends private SpringBoard lock-screen and biometric-resource messages. Always On runs SpringBoard timers while the device is locked. It is currently unstable when paired with other persistent RemoteCall tweaks like Dynamic Stage Lite, so avoid stacking it with other live tweaks for now.";
 #endif
 
         Package *nanoRegistry = [[Package alloc] initWithIdentifier:@"com.darksword.nanoregistry"

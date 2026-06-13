@@ -14,6 +14,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)presentCallRecordingDisclosureIfNeededFromViewController:(UIViewController *)presenter
                                                   confirmHandler:(dispatch_block_t)confirmHandler;
++ (BOOL)isFastLockXLitePackage:(Package *)package;
++ (void)presentFastLockXLiteStackingWarningFromViewController:(UIViewController *)presenter
+                                                      package:(Package *)package
+                                               confirmHandler:(dispatch_block_t)confirmHandler;
 
 - (instancetype)initWithPackage:(Package *)package NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithStyle:(UITableViewStyle)style NS_UNAVAILABLE;

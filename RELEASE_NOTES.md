@@ -32,6 +32,15 @@ omit it.
 
 ## Released
 
+### v1.2.23 - 2026-06-13
+
+- [x] Fixed Hide Home Bar causing a kernel panic.
+- [x] Added a FastLockX Lite install warning about pairing it with Dynamic Stage Lite or other persistent RemoteCall tweaks.
+- [x] Fixed SnowBoard Lite causing delayed SpringBoard resprings after applying a theme.
+- [x] Fixed FastLockX Lite dismissing Notification Center back to the Home Screen when Always On is enabled.
+- [x] Fixed FastLockX Lite firing unlock attempts while the screen is already unlocked and firing too aggressively during brief display wakes caused by its own biometric retry cycle.
+- [x] Made Dynamic Stage Lite windows scale hosted app content to fit inside the resized window instead of cropping into a zoomed view.
+
 ### v1.2.22 - 2026-06-12
 
 - [x] FastLockX Lite now installs through the normal Apply Tweaks queue and uses the shared SpringBoard setup with other runtime tweaks.
