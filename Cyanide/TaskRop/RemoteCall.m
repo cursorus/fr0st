@@ -58,6 +58,27 @@ extern kern_return_t mach_vm_deallocate(task_t task, mach_vm_address_t address, 
 
 uint64_t g_RC_targetProcOverride = 0;
 uint64_t g_RC_gadgetPacia = 0;
+
+static pthread_mutex_t g_universal_ipc_mutex;
+static pthread_once_t g_universal_ipc_mutex_once = PTHREAD_ONCE_INIT;
+
+static void init_universal_mutex(void) {
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&g_universal_ipc_mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+
+
+
+uint64_t do_remote_call_temp_internal(int timeout, const char *name, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3, uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7);
+uint64_t do_remote_call_stable_addr_internal(int timeout, uint64_t pcAddr, const char *name, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3, uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7);
+bool remote_read_internal(uint64_t src, void *dst, uint64_t size);
+bool remote_write_internal(uint64_t dst, const void *src, uint64_t size);
+int destroy_remote_call_internal(void);
+void abandon_remote_call_internal(void);
+
 static __thread RemoteCallInitFailure g_RC_lastInitFailure = RemoteCallInitFailureNone;
 static __thread uint32_t g_RC_lastInitFailurePid = 0;
 
@@ -590,6 +611,18 @@ uint64_t do_remote_call_temp(int timeout, const char *name,
     uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3,
     uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7)
 {
+    pthread_once(&g_universal_ipc_mutex_once, init_universal_mutex);
+    pthread_mutex_lock(&g_universal_ipc_mutex);
+    uint64_t res = do_remote_call_temp_internal(timeout, name, x0, x1, x2, x3, x4, x5, x6, x7);
+    pthread_mutex_unlock(&g_universal_ipc_mutex);
+    return res;
+}
+
+
+uint64_t do_remote_call_temp_internal(int timeout, const char *name,
+    uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3,
+    uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7)
+{
     int floorTimeout = g_RC_stableExceptionTimeoutFloorMS > 0 ? g_RC_stableExceptionTimeoutFloorMS : 10000;
     int newTimeout = (floorTimeout > timeout) ? floorTimeout : timeout;
     uint64_t pcAddr = native_strip((uint64_t)dlsym(RTLD_DEFAULT, name));
@@ -651,6 +684,18 @@ uint64_t do_remote_call_stable(int timeout, const char *name,
 }
 
 uint64_t do_remote_call_stable_addr(int timeout, uint64_t pcAddr, const char *name,
+    uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3,
+    uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7)
+{
+    pthread_once(&g_universal_ipc_mutex_once, init_universal_mutex);
+    pthread_mutex_lock(&g_universal_ipc_mutex);
+    uint64_t res = do_remote_call_stable_addr_internal(timeout, pcAddr, name, x0, x1, x2, x3, x4, x5, x6, x7);
+    pthread_mutex_unlock(&g_universal_ipc_mutex);
+    return res;
+}
+
+
+uint64_t do_remote_call_stable_addr_internal(int timeout, uint64_t pcAddr, const char *name,
     uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3,
     uint64_t x4, uint64_t x5, uint64_t x6, uint64_t x7)
 {
@@ -719,6 +764,13 @@ bool restore_trojan_thread(arm_thread_state64_internal *state)
 }
 
 void abandon_remote_call(void) {
+    pthread_once(&g_universal_ipc_mutex_once, init_universal_mutex);
+    pthread_mutex_lock(&g_universal_ipc_mutex);
+    abandon_remote_call_internal();
+    pthread_mutex_unlock(&g_universal_ipc_mutex);
+}
+
+void abandon_remote_call_internal(void) {
     // Skip every SB-side IPC. Caller has decided that the remote task is dead
     // (typically SpringBoard finished a respawn). Touching the dead trojan
     // would hang for the call timeout. Local resources still need releasing.
@@ -752,6 +804,14 @@ void abandon_remote_call(void) {
 }
 
 int destroy_remote_call(void) {
+    pthread_once(&g_universal_ipc_mutex_once, init_universal_mutex);
+    pthread_mutex_lock(&g_universal_ipc_mutex);
+    int res = destroy_remote_call_internal();
+    pthread_mutex_unlock(&g_universal_ipc_mutex);
+    return res;
+}
+
+int destroy_remote_call_internal(void) {
     if (!remote_call_has_local_state()) {
         clear_remote_shmem_cache();
         (void)reap_dead_port_names("destroy_remote_call");
@@ -884,7 +944,15 @@ struct VMShmem *get_shmem_for_page(uint64_t pageAddr)
     return put_shmem_in_cache(&newShmem);
 }
 
-bool remote_read(uint64_t src, void *dst, uint64_t size)
+bool remote_read(uint64_t src, void *dst, uint64_t size) {
+    pthread_once(&g_universal_ipc_mutex_once, init_universal_mutex);
+    pthread_mutex_lock(&g_universal_ipc_mutex);
+    bool res = remote_read_internal(src, dst, size);
+    pthread_mutex_unlock(&g_universal_ipc_mutex);
+    return res;
+}
+
+bool remote_read_internal(uint64_t src, void *dst, uint64_t size)
 {
     if (!src || !dst || !size) return false;
     uint64_t dstAddr = (uint64_t)(uintptr_t)dst;
@@ -955,7 +1023,15 @@ void remote_hexdump(uint64_t remoteAddr, size_t size)
     free(buf);
 }
 
-bool remote_write(uint64_t dst, const void *src, uint64_t size)
+bool remote_write(uint64_t dst, const void *src, uint64_t size) {
+    pthread_once(&g_universal_ipc_mutex_once, init_universal_mutex);
+    pthread_mutex_lock(&g_universal_ipc_mutex);
+    bool res = remote_write_internal(dst, src, size);
+    pthread_mutex_unlock(&g_universal_ipc_mutex);
+    return res;
+}
+
+bool remote_write_internal(uint64_t dst, const void *src, uint64_t size)
 {
     if (!src || !dst || !size) return false;
     
