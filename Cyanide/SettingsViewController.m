@@ -2460,8 +2460,8 @@ static bool settings_apply_gravitylite_from_defaults_locked(NSUserDefaults *d)
 static double settings_fastlockx_lite_retry_interval(NSUserDefaults *d)
 {
     id raw = [d objectForKey:kSettingsFastLockXLiteRetryInterval];
-    double value = [raw respondsToSelector:@selector(doubleValue)] ? [raw doubleValue] : 0.5;
-    if (!isfinite(value) || value <= 0.0) value = 0.5;
+    double value = [raw respondsToSelector:@selector(doubleValue)] ? [raw doubleValue] : 0.3;
+    if (!isfinite(value) || value <= 0.0) value = 0.3;
     if (value < 0.1) value = 0.1;
     if (value > 2.0) value = 2.0;
     return value;
@@ -5592,7 +5592,7 @@ void settings_register_defaults(void)
         kSettingsFastLockXLiteBlockMusic: @NO,
         kSettingsFastLockXLiteBlockFlashlight: @NO,
         kSettingsFastLockXLiteBlockLowPower: @NO,
-        kSettingsFastLockXLiteRetryInterval: @0.5,
+        kSettingsFastLockXLiteRetryInterval: @0.3,
 
         kSettingsGravityLiteEnabled: @NO,
         kSettingsGravityLiteDockEnabled: @YES,
@@ -7467,8 +7467,8 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         @{ @"kind": @"number",
            @"key": kSettingsFastLockXLiteRetryInterval,
            @"title": @"Retry interval",
-           @"subtitle": @"Original FastLockX defaulted to 0.5s. Always On uses this as the off→on pulse gap.",
-           @"min": @0.1, @"max": @2.0, @"step": @0.1, @"unit": @"s", @"precision": @1, @"default": @0.5 },
+           @"subtitle": @"Always On uses this as the off→on pulse gap. Default 0.3s.",
+           @"min": @0.1, @"max": @2.0, @"step": @0.1, @"unit": @"s", @"precision": @1, @"default": @0.3 },
         @{ @"key": kSettingsFastLockXLiteBlockMusic,
            @"title": @"Block if media is active — In progress",
            @"subtitle": @"In progress — not wired yet. This blocker is disabled for now.",
