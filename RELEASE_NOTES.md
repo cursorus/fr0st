@@ -29,6 +29,9 @@ omit it.
 
 ## Pending
 
+- [ ] Fixed a hang and SpringBoard crash when applying layout, icon, or theme tweaks that read the SpringBoard view hierarchy.
+- [ ] FastLockX Lite now defaults to a 0.3s retry interval for a faster pickup-to-unlock pulse.
+
 
 ## Released
 
