@@ -169,6 +169,24 @@ uint64_t r_msg(uint64_t obj, uint64_t sel,
                          obj, sel, a0, a1, a2, a3, 0, 0);
 }
 
+static uint64_t r_msg_retained_return(uint64_t obj, uint64_t sel,
+                                      uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3)
+{
+    if (!obj || !sel) return 0;
+
+    if (remote_call_uses_vphone_bridge()) {
+        return r_call_stable(R_TIMEOUT, "objc_msgSend_retain",
+                             obj, sel, a0, a1, a2, a3, 0, 0);
+    }
+
+    uint64_t ret = r_msg(obj, sel, a0, a1, a2, a3);
+    if (r_is_objc_ptr(ret)) {
+        uint64_t retained = r_msg(ret, r_sel("retain"), 0, 0, 0, 0);
+        if (r_is_objc_ptr(retained)) ret = retained;
+    }
+    return ret;
+}
+
 uint64_t r_msg2(uint64_t obj, const char *selName,
                 uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3)
 {
@@ -184,7 +202,7 @@ static uint64_t r_method_signature(uint64_t obj, uint64_t sel)
     if (!r_is_objc_ptr(obj) || !sel) return 0;
 
     uint64_t sigSel = r_sel("methodSignatureForSelector:");
-    uint64_t sig = r_msg(obj, sigSel, sel, 0, 0, 0);
+    uint64_t sig = r_msg_retained_return(obj, sigSel, sel, 0, 0, 0);
     if (r_is_objc_ptr(sig)) return sig;
 
     uint64_t cls = r_call_stable(R_TIMEOUT, "object_getClass",
@@ -201,7 +219,9 @@ static uint64_t r_method_signature(uint64_t obj, uint64_t sel)
 
     uint64_t NSMethodSignature = r_class("NSMethodSignature");
     if (!r_is_objc_ptr(NSMethodSignature)) return 0;
-    return r_msg2(NSMethodSignature, "signatureWithObjCTypes:", types, 0, 0, 0);
+    return r_msg_retained_return(NSMethodSignature,
+                                 r_sel("signatureWithObjCTypes:"),
+                                 types, 0, 0, 0);
 }
 
 static bool r_write_remote_arg(uint64_t remoteBuf, const void *arg, size_t argSize, size_t remoteSize)
@@ -241,11 +261,10 @@ uint64_t r_msg_main_raw(uint64_t obj, uint64_t sel,
     uint64_t NSInvocation = r_class("NSInvocation");
     if (!r_is_objc_ptr(NSInvocation)) return 0;
 
-    uint64_t inv = r_msg2(NSInvocation, "invocationWithMethodSignature:", sig, 0, 0, 0);
+    uint64_t inv = r_msg_retained_return(NSInvocation,
+                                         r_sel("invocationWithMethodSignature:"),
+                                         sig, 0, 0, 0);
     if (!r_is_objc_ptr(inv)) return 0;
-
-    uint64_t retainedInv = r_msg2(inv, "retain", 0, 0, 0, 0);
-    if (r_is_objc_ptr(retainedInv)) inv = retainedInv;
 
     uint64_t numArgs = r_msg2(sig, "numberOfArguments", 0, 0, 0, 0);
     uint64_t maxUserArgs = (numArgs > 2) ? (numArgs - 2) : 0;
@@ -309,6 +328,11 @@ uint64_t r_msg_main_raw(uint64_t obj, uint64_t sel,
 uint64_t r_msg_main(uint64_t obj, uint64_t sel,
                     uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3)
 {
+    if (remote_call_uses_vphone_bridge()) {
+        return r_call_stable(R_TIMEOUT, "objc_msgSend_main",
+                             obj, sel, a0, a1, a2, a3, 0, 0);
+    }
+
     uint64_t args[4] = { a0, a1, a2, a3 };
     return r_msg_main_raw(obj, sel,
                           &args[0], sizeof(args[0]),
@@ -348,7 +372,9 @@ void r_msg2_main_async(uint64_t obj, const char *selName,
 
     uint64_t NSInvocation = r_class("NSInvocation");
     if (!r_is_objc_ptr(NSInvocation)) return;
-    uint64_t inv = r_msg2(NSInvocation, "invocationWithMethodSignature:", sig, 0, 0, 0);
+    uint64_t inv = r_msg_retained_return(NSInvocation,
+                                         r_sel("invocationWithMethodSignature:"),
+                                         sig, 0, 0, 0);
     if (!r_is_objc_ptr(inv)) return;
 
     uint64_t numArgs = r_msg2(sig, "numberOfArguments", 0, 0, 0, 0);
@@ -418,11 +444,10 @@ bool r_msg2_main_struct_ret(uint64_t obj, const char *selName,
     uint64_t NSInvocation = r_class("NSInvocation");
     if (!r_is_objc_ptr(NSInvocation)) return false;
 
-    uint64_t inv = r_msg2(NSInvocation, "invocationWithMethodSignature:", sig, 0, 0, 0);
+    uint64_t inv = r_msg_retained_return(NSInvocation,
+                                         r_sel("invocationWithMethodSignature:"),
+                                         sig, 0, 0, 0);
     if (!r_is_objc_ptr(inv)) return false;
-
-    uint64_t retainedInv = r_msg2(inv, "retain", 0, 0, 0, 0);
-    if (r_is_objc_ptr(retainedInv)) inv = retainedInv;
 
     uint64_t numArgs = r_msg2(sig, "numberOfArguments", 0, 0, 0, 0);
     uint64_t maxUserArgs = (numArgs > 2) ? (numArgs - 2) : 0;
@@ -484,6 +509,10 @@ bool r_msg2_main_struct_ret(uint64_t obj, const char *selName,
 uint64_t r_perform_main(uint64_t obj, uint64_t sel, uint64_t object, bool wait)
 {
     if (!r_is_objc_ptr(obj) || !sel) return 0;
+    if (remote_call_uses_vphone_bridge()) {
+        return r_msg_main(obj, sel, object, 0, 0, 0);
+    }
+
     uint64_t performSel = r_sel("performSelectorOnMainThread:withObject:waitUntilDone:");
     if (!performSel) return 0;
     return r_msg(obj, performSel, sel, object, wait ? 1 : 0, 0);

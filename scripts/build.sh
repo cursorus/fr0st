@@ -6,7 +6,7 @@
 #
 # Run as: ./scripts/build.sh
 # Override defaults with env vars:
-#   SCHEME, CONFIG (Debug|Release), SDK (iphoneos|iphonesimulator)
+#   SCHEME, CONFIG (Debug|Release|VPhone Debug), SDK (iphoneos|iphonesimulator)
 #
 # The version comes from CFBundleShortVersionString in the built Info.plist
 # (= the MARKETING_VERSION build setting in the xcodeproj). Bump
@@ -20,13 +20,30 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SCHEME="${SCHEME:-Cyanide}"
-CONFIG="${CONFIG:-Debug}"
+if [ "$SCHEME" = "CyanideVPhone" ]; then
+    CONFIG="${CONFIG:-VPhone Debug}"
+    if [ "$CONFIG" != "VPhone Debug" ]; then
+        echo "error: CyanideVPhone must use CONFIG='VPhone Debug'" >&2
+        exit 1
+    fi
+else
+    CONFIG="${CONFIG:-Debug}"
+    if [ "$CONFIG" = "VPhone Debug" ]; then
+        echo "error: CONFIG='VPhone Debug' is only for SCHEME=CyanideVPhone" >&2
+        exit 1
+    fi
+fi
 SDK="${SDK:-iphoneos}"
 PROJECT="Cyanide.xcodeproj"
 DERIVED="$PWD/build/DerivedData"
 PRODUCT_DIR="$DERIVED/Build/Products/${CONFIG}-${SDK}"
 APP_NAME="Cyanide.app"
-IPA_LATEST="$PWD/build/Cyanide.ipa"
+if [ "$SCHEME" = "CyanideVPhone" ]; then
+    IPA_PREFIX="CyanideVPhone"
+else
+    IPA_PREFIX="Cyanide"
+fi
+IPA_LATEST="$PWD/build/${IPA_PREFIX}.ipa"
 XCODEBUILD_EXTRA=()
 
 if [ "$SDK" = "iphonesimulator" ]; then
@@ -67,13 +84,56 @@ if [ "$SDK" = "iphonesimulator" ]; then
     exit 0
 fi
 
+if [ "$SCHEME" = "CyanideVPhone" ]; then
+    VPHONE_BRIDGE_SRC="$PWD/vphone-assets/vphone_springboard_bridge.dylib"
+    VPHONE_BRIDGE_SOURCE="$PWD/vphone-assets/vphone_springboard_bridge.m"
+    VPHONE_BRIDGE_DST="$APP_PATH/vphone_springboard_bridge.dylib"
+    if [ -f "$VPHONE_BRIDGE_SOURCE" ]; then
+        echo "==> building vphone SpringBoard bridge"
+        VPHONE_BRIDGE_BUILD="$PWD/build/vphone-bridge"
+        VPHONE_BRIDGE_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+        mkdir -p "$VPHONE_BRIDGE_BUILD"
+        xcrun --sdk iphoneos clang -arch arm64 \
+            -isysroot "$VPHONE_BRIDGE_SDK" \
+            -miphoneos-version-min=15.0 \
+            -dynamiclib \
+            "$VPHONE_BRIDGE_SOURCE" \
+            -framework Foundation -framework CoreFoundation -lobjc \
+            -install_name @rpath/vphone_springboard_bridge.dylib \
+            -o "$VPHONE_BRIDGE_BUILD/vphone_springboard_bridge.arm64.dylib"
+        xcrun --sdk iphoneos clang -arch arm64e \
+            -isysroot "$VPHONE_BRIDGE_SDK" \
+            -miphoneos-version-min=15.0 \
+            -dynamiclib \
+            "$VPHONE_BRIDGE_SOURCE" \
+            -framework Foundation -framework CoreFoundation -lobjc \
+            -install_name @rpath/vphone_springboard_bridge.dylib \
+            -o "$VPHONE_BRIDGE_BUILD/vphone_springboard_bridge.arm64e.dylib"
+        lipo -create \
+            "$VPHONE_BRIDGE_BUILD/vphone_springboard_bridge.arm64.dylib" \
+            "$VPHONE_BRIDGE_BUILD/vphone_springboard_bridge.arm64e.dylib" \
+            -output "$VPHONE_BRIDGE_SRC"
+    fi
+    if [ ! -f "$VPHONE_BRIDGE_SRC" ]; then
+        echo "error: missing vphone bridge dylib: $VPHONE_BRIDGE_SRC" >&2
+        exit 1
+    fi
+    echo "==> bundling vphone SpringBoard bridge"
+    ditto "$VPHONE_BRIDGE_SRC" "$VPHONE_BRIDGE_DST"
+    chmod 0755 "$VPHONE_BRIDGE_DST"
+    # The bridge is loaded into SpringBoard by TweakLoader. Keep it fat
+    # arm64/arm64e and ad-hoc sign it with no entitlements; app/helper
+    # entitlements make SpringBoard/AMFI reject the dylib on vphone.
+    ldid -S "$VPHONE_BRIDGE_DST"
+fi
+
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Info.plist" 2>/dev/null || true)
 if [ -z "$VERSION" ]; then
     echo "error: could not read CFBundleShortVersionString from $APP_PATH/Info.plist" >&2
     exit 1
 fi
 
-IPA_OUT="$PWD/build/Cyanide-${VERSION}.ipa"
+IPA_OUT="$PWD/build/${IPA_PREFIX}-${VERSION}.ipa"
 IPA_BASENAME="$(basename "$IPA_OUT")"
 LATEST_BASENAME="$(basename "$IPA_LATEST")"
 
@@ -93,3 +153,22 @@ rm -f "$IPA_LATEST"
 SIZE=$(du -h "$IPA_OUT" | cut -f1)
 echo "==> wrote $IPA_OUT ($SIZE)"
 echo "==> symlink $IPA_LATEST -> $IPA_BASENAME"
+
+if [ "$SCHEME" = "CyanideVPhone" ]; then
+    ARM64_IPA_OUT="$PWD/build/CyanideVPhone-vphone-arm64.ipa"
+    ARM64_STAGE="$(mktemp -d -t cyanide-vphone-arm64)"
+    trap 'rm -rf "$STAGE" "${ARM64_STAGE:-}"' EXIT
+    mkdir -p "$ARM64_STAGE/Payload"
+    ditto "$APP_PATH" "$ARM64_STAGE/Payload/Cyanide.app"
+    lipo "$ARM64_STAGE/Payload/Cyanide.app/Cyanide" -thin arm64 \
+        -output "$ARM64_STAGE/Payload/Cyanide.app/Cyanide.arm64"
+    mv "$ARM64_STAGE/Payload/Cyanide.app/Cyanide.arm64" \
+        "$ARM64_STAGE/Payload/Cyanide.app/Cyanide"
+    chmod +x "$ARM64_STAGE/Payload/Cyanide.app/Cyanide"
+    ldid -S"$PWD/scripts/vphone_app.entitlements" \
+        "$ARM64_STAGE/Payload/Cyanide.app/Cyanide"
+    rm -f "$ARM64_IPA_OUT"
+    ( cd "$ARM64_STAGE" && zip -qry "$ARM64_IPA_OUT" Payload )
+    ARM64_SIZE=$(du -h "$ARM64_IPA_OUT" | cut -f1)
+    echo "==> wrote $ARM64_IPA_OUT ($ARM64_SIZE)"
+fi

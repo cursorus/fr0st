@@ -329,17 +329,17 @@ static const NSInteger kSecFastLockXLite    = 24;
         Package *fastLockXLite = [[Package alloc] initWithIdentifier:@"com.darksword.fastlockx-lite"
                                            name:@"FastLockX Lite"
                                shortDescription:@"Face ID retry + unlock controls"
-                                longDescription:@"RemoteCall-only port of the usable FastLockX primitives recovered from the iOS 15 tweak by Artem Kasper.\n\nCredits: original FastLockX by Artem Kasper; Cyanide FastLockX Lite port by zeroxjf.\n\nIt can pulse SpringBoard's biometric retry path, ask the iOS 26 biometric coordinator to start a Mesa/Face ID unlock, and send the original Lock Screen unlock request as a fallback. The Always On button keeps those retry/unlock requests armed with SpringBoard timers so pickup-to-unlock can work after Cyanide's 15-second test window ends.\n\nUse Disable, Clean Up, or a respring to stop the timers."
+                                longDescription:@"RemoteCall-only port of the usable FastLockX primitives recovered from the iOS 15 tweak by Artem Kasper.\n\nCredits: original FastLockX by Artem Kasper; Cyanide FastLockX Lite port by zeroxjf.\n\nIt can pulse SpringBoard's biometric retry path, ask the iOS 26 biometric coordinator to start a Mesa/Face ID unlock, and send the original Lock Screen unlock request as a fallback. Installing it through Apply Tweaks keeps those retry/unlock requests armed with SpringBoard timers so pickup-to-unlock can work after Cyanide closes. The pulse loop pauses again after unlock.\n\nUse Disable, Clean Up, or a respring to stop the timers."
                                         version:version
                                          author:@"Artem Kasper / zeroxjf"
                                        category:@"Experimental"
                                      symbolName:@"lock.open.fill"
-                                           kind:PackageInstallKindDirectTool
-                                     enabledKey:nil
+                                           kind:PackageInstallKindToggle
+                                     enabledKey:kSettingsFastLockXLiteEnabled
                                           isNew:YES];
         fastLockXLite.settingsSection = kSecFastLockXLite;
         fastLockXLite.experimental = YES;
-        fastLockXLite.unstableWarning = @"Experimental: sends private SpringBoard lock-screen and biometric-resource messages. Always On runs repeating SpringBoard timers, so disable it or respring if Face ID feels noisy or unstable.";
+        fastLockXLite.unstableWarning = @"Experimental: sends private SpringBoard lock-screen and biometric-resource messages. Always On runs SpringBoard timers while the device is locked, so disable it or respring if Face ID feels noisy or unstable.";
 #endif
 
         Package *nanoRegistry = [[Package alloc] initWithIdentifier:@"com.darksword.nanoregistry"

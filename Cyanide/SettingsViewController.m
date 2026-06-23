@@ -4,6 +4,7 @@
 //
 
 #import "SettingsViewController.h"
+#import "VPhoneDebug.h"
 #import "kexploit/kexploit_opa334.h"
 #import "tweaks/sbcustomizer.h"
 #import "tweaks/powercuff.h"
@@ -266,7 +267,7 @@ NSString * const kSettingsAxonLiteEnabled = @"AxonLiteEnabled";
 NSString * const kSettingsTypeBannerEnabled = @"TypeBannerEnabled";
 NSString * const kSettingsNotificationIslandEnabled = @"NotificationIslandEnabled";
 NSString * const kSettingsAppSwitcherGridEnabled = @"AppSwitcherGridEnabled";
-static NSString * const kSettingsFastLockXLiteEnabled = @"FastLockXLiteEnabled";
+NSString * const kSettingsFastLockXLiteEnabled = @"FastLockXLiteEnabled";
 static NSString * const kSettingsFastLockXLiteBlockMusic = @"FastLockXLiteBlockMusic";
 static NSString * const kSettingsFastLockXLiteBlockFlashlight = @"FastLockXLiteBlockFlashlight";
 static NSString * const kSettingsFastLockXLiteBlockLowPower = @"FastLockXLiteBlockLowPower";
@@ -570,13 +571,51 @@ static bool settings_stop_stagestrip_registered(BOOL springboardWillDie)
     return stagestrip_stop_in_session();
 }
 
+static volatile int g_fastlockx_lite_remote_active_state = -1;
+static volatile uint64_t g_fastlockx_lite_last_unlock_nudge_ms = 0;
+
+static uint64_t settings_now_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((uint64_t)tv.tv_sec * 1000ULL) + ((uint64_t)tv.tv_usec / 1000ULL);
+}
+
+static void settings_maybe_nudge_fastlockx_lite_awake_locked(const char *why,
+                                                             BOOL awake,
+                                                             BOOL locked)
+{
+    if (!awake || !locked) {
+        __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
+        return;
+    }
+
+    uint64_t now = settings_now_ms();
+    uint64_t lastNudge = g_fastlockx_lite_last_unlock_nudge_ms;
+    if (now > lastNudge + 900 &&
+        __sync_bool_compare_and_swap(&g_fastlockx_lite_last_unlock_nudge_ms,
+                                     lastNudge,
+                                     now)) {
+        bool nudgeOK = fastlockx_lite_attempt_unlock_in_session(false);
+        printf("[SETTINGS] FastLockX awake unlock nudge reason=%s ok=%d awake=%d locked=%d\n",
+               why ?: "screen state",
+               nudgeOK,
+               awake,
+               locked);
+    }
+}
+
 static bool settings_stop_fastlockx_lite_registered(BOOL springboardWillDie)
 {
+    __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state, -1);
+    __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
     if (springboardWillDie) {
         fastlockx_lite_forget_remote_state();
         return true;
     }
-    return fastlockx_lite_disable_always_on_in_session();
+    bool ok = fastlockx_lite_disable_always_on_in_session();
+    if (!ok) __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state, -1);
+    return ok;
 }
 
 static bool settings_stop_livewp_registered(BOOL springboardWillDie)
@@ -601,10 +640,10 @@ static void settings_each_springboard_cleanup_entry(void (^block)(const Settings
         { kSettingsAppSwitcherGridEnabled, "App Switcher Grid", NULL, settings_stop_appswitchergrid_registered, appswitchergrid_forget_remote_state, NULL, YES, YES },
         { kSettingsGravityLiteEnabled, "Gravity Lite", settings_request_gravitylite_stop, settings_stop_gravitylite_registered, gravitylite_forget_remote_state, NULL, YES, YES },
         { kSettingsThemerEnabled, "Themer", settings_request_themer_stop, settings_stop_themer_registered, themer_forget_remote_state, settings_themer_running, YES, YES },
-        { kSettingsSnowBoardLiteEnabled, "SnowBoard Lite", settings_request_themer_stop, settings_stop_themer_registered, themer_forget_remote_state, settings_themer_running, YES, YES },
+        { kSettingsSnowBoardLiteEnabled, "SnowBoard Lite", NULL, settings_stop_themer_registered, themer_forget_remote_state, NULL, NO, NO },
         { kSettingsLiveWPEnabled, "LiveWP", settings_request_livewp_stop, settings_stop_livewp_registered, livewp_forget_remote_state, settings_livewp_running, YES, YES },
         { kSettingsStageStripEnabled, "Stage Strip", settings_request_stagestrip_stop, settings_stop_stagestrip_registered, stagestrip_forget_remote_state, NULL, YES, YES },
-        { kSettingsFastLockXLiteEnabled, "FastLockX Lite", NULL, settings_stop_fastlockx_lite_registered, fastlockx_lite_forget_remote_state, NULL, YES, YES },
+        { kSettingsFastLockXLiteEnabled, "FastLockX Lite", NULL, settings_stop_fastlockx_lite_registered, fastlockx_lite_forget_remote_state, NULL, NO, YES },
         { nil, "Kill All Apps", NULL, NULL, killallapps_forget_remote_state, NULL, NO, NO },
     };
     size_t count = sizeof(entries) / sizeof(entries[0]);
@@ -753,6 +792,63 @@ static NSMutableSet<NSString *> *settings_applied_keys_set(void)
     return g_applied_tweak_keys;
 }
 
+static BOOL settings_key_persists_applied_state(NSString *key)
+{
+    // SBCustomizer is a one-shot SpringBoard layout patch. Applying it can
+    // briefly send Cyanide back to SpringBoard on vphone/real devices, and the
+    // in-memory applied set is lost if iOS relaunches the app. Persist only
+    // this non-live marker so the Installer does not immediately requeue a
+    // successfully-applied layout patch after Cyanide reopens.
+    return [key isEqualToString:kSettingsSBCEnabled];
+}
+
+static NSString *settings_persisted_applied_bool_key(NSString *key)
+{
+    return [@"CyanideApplied." stringByAppendingString:key ?: @""];
+}
+
+static NSString *settings_persisted_applied_pid_key(NSString *key)
+{
+    return [@"CyanideAppliedSpringBoardPID." stringByAppendingString:key ?: @""];
+}
+
+static void settings_set_persisted_applied(NSString *key, BOOL applied)
+{
+    if (!settings_key_persists_applied_state(key)) return;
+
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    NSString *appliedKey = settings_persisted_applied_bool_key(key);
+    NSString *pidKey = settings_persisted_applied_pid_key(key);
+    if (applied) {
+        int pid = remote_call_current_pid();
+        [d setBool:YES forKey:appliedKey];
+        if (pid > 0) [d setInteger:pid forKey:pidKey];
+    } else {
+        [d removeObjectForKey:appliedKey];
+        [d removeObjectForKey:pidKey];
+    }
+    [d synchronize];
+}
+
+static BOOL settings_persisted_applied(NSString *key)
+{
+    if (!settings_key_persists_applied_state(key)) return NO;
+
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    if (![d boolForKey:settings_persisted_applied_bool_key(key)]) return NO;
+
+    // If a SpringBoard RemoteCall session is open, validate the marker against
+    // that SpringBoard pid. If no session is open yet, trust the persisted
+    // marker; explicit Clean Up / Respring / disabling the tweak clears it.
+    NSInteger storedPid = [d integerForKey:settings_persisted_applied_pid_key(key)];
+    int currentPid = remote_call_current_pid();
+    if (storedPid > 0 && currentPid > 0 && storedPid != currentPid) {
+        settings_set_persisted_applied(key, NO);
+        return NO;
+    }
+    return YES;
+}
+
 static void settings_mark_tweak_applied(NSString *key, BOOL applied)
 {
     if (!key) return;
@@ -761,6 +857,7 @@ static void settings_mark_tweak_applied(NSString *key, BOOL applied)
         if (applied) [set addObject:key];
         else         [set removeObject:key];
     }
+    settings_set_persisted_applied(key, applied);
 }
 
 BOOL settings_tweak_is_applied(NSString *key)
@@ -768,8 +865,9 @@ BOOL settings_tweak_is_applied(NSString *key)
     if (!key) return NO;
     NSMutableSet *set = settings_applied_keys_set();
     @synchronized (set) {
-        return [set containsObject:key];
+        if ([set containsObject:key]) return YES;
     }
+    return settings_persisted_applied(key);
 }
 
 static BOOL settings_clear_all_applied_locked(void)
@@ -779,6 +877,12 @@ static BOOL settings_clear_all_applied_locked(void)
     @synchronized (set) {
         if (set.count > 0) {
             [set removeAllObjects];
+            changed = YES;
+        }
+    }
+    for (NSString *key in @[ kSettingsSBCEnabled ]) {
+        if (settings_persisted_applied(key)) {
+            settings_set_persisted_applied(key, NO);
             changed = YES;
         }
     }
@@ -951,8 +1055,50 @@ static BOOL settings_themer_dynamic_updates_blocked_by_stage(NSUserDefaults *d)
 {
     if (!settings_stagestrip_install_allowed()) return NO;
     if (![d boolForKey:kSettingsStageStripEnabled]) return NO;
-    return [d boolForKey:kSettingsThemerEnabled] ||
-           [d boolForKey:kSettingsSnowBoardLiteEnabled];
+    return [d boolForKey:kSettingsThemerEnabled];
+}
+
+static BOOL settings_themer_live_repair_enabled(NSUserDefaults *d)
+{
+    return [d boolForKey:kSettingsThemerEnabled] &&
+           settings_tweak_is_applied(kSettingsThemerEnabled);
+}
+
+static BOOL settings_snowboardlite_live_repair_enabled(NSUserDefaults *d)
+{
+    return [d boolForKey:kSettingsSnowBoardLiteEnabled] &&
+           settings_tweak_is_applied(kSettingsSnowBoardLiteEnabled);
+}
+
+static BOOL settings_icon_theme_live_repair_enabled(NSUserDefaults *d)
+{
+    return settings_themer_live_repair_enabled(d) ||
+           settings_snowboardlite_live_repair_enabled(d);
+}
+
+static BOOL settings_snowboardlite_should_release_repair_session(NSUserDefaults *d)
+{
+    if (!settings_snowboardlite_live_repair_enabled(d)) return NO;
+
+    __block BOOL otherPersistentUser = NO;
+    settings_each_springboard_cleanup_entry(^(const SettingsSpringBoardTweakCleanupEntry *entry) {
+        if (otherPersistentUser || !entry->key) return;
+        if ([entry->key isEqualToString:kSettingsSnowBoardLiteEnabled]) return;
+        if ([entry->key isEqualToString:kSettingsThemerEnabled]) {
+            otherPersistentUser = settings_themer_live_repair_enabled(d);
+            return;
+        }
+        if (entry->isRunning && entry->isRunning()) {
+            otherPersistentUser = YES;
+            return;
+        }
+        if ((entry->keepsSpringBoardSession || entry->cleanupOnTermination) &&
+            [d boolForKey:entry->key] &&
+            settings_tweak_is_applied(entry->key)) {
+            otherPersistentUser = YES;
+        }
+    });
+    return !otherPersistentUser;
 }
 
 static void settings_note_themer_stage_conflict(BOOL userVisible)
@@ -1043,6 +1189,71 @@ static BOOL settings_refresh_screen_lock_state(const char *reason)
     return old != newValue;
 }
 
+static void settings_sync_fastlockx_lite_for_screen_state_async(const char *reason)
+{
+    if (!settings_fastlockx_lite_install_allowed()) return;
+
+    NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+    if (![d boolForKey:kSettingsFastLockXLiteEnabled] ||
+        !settings_tweak_is_applied(kSettingsFastLockXLiteEnabled)) {
+        return;
+    }
+
+    const char *why = reason ? reason : "screen state";
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        usleep(80000); // let SpringBoard's display/lock notify states settle
+        if (settings_cleanup_in_progress()) return;
+        @synchronized (settings_rc_lock()) {
+            if (settings_cleanup_in_progress() ||
+                ![d boolForKey:kSettingsFastLockXLiteEnabled] ||
+                !settings_tweak_is_applied(kSettingsFastLockXLiteEnabled)) {
+                return;
+            }
+            (void)settings_refresh_screen_awake_state(why);
+            (void)settings_refresh_screen_lock_state(why);
+            BOOL awake = settings_screen_awake_cached();
+            BOOL locked = settings_screen_locked_cached();
+            BOOL active = !awake && locked;
+            int desiredState = active ? 1 : 0;
+            if (!g_springboard_rc_ready || g_settings_actions_running) {
+                printf("[SETTINGS] FastLockX screen sync skipped: ready=%d actions=%d reason=%s active=%d awake=%d locked=%d\n",
+                       g_springboard_rc_ready,
+                       g_settings_actions_running,
+                       why,
+                       active,
+                       awake,
+                       locked);
+                return;
+            }
+            int lastState = g_fastlockx_lite_remote_active_state;
+            if (lastState == desiredState) {
+                settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
+                printf("[SETTINGS] FastLockX screen sync unchanged reason=%s active=%d awake=%d locked=%d\n",
+                       why,
+                       active,
+                       awake,
+                       locked);
+                return;
+            }
+            bool ok = fastlockx_lite_set_always_on_active_in_session(active);
+            __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state,
+                                     ok ? desiredState : -1);
+            if (ok) {
+                settings_maybe_nudge_fastlockx_lite_awake_locked(why, awake, locked);
+            } else {
+                __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
+            }
+            printf("[SETTINGS] FastLockX screen sync reason=%s active=%d awake=%d locked=%d ok=%d\n",
+                   why,
+                   active,
+                   awake,
+                   locked,
+                   ok);
+        }
+    });
+}
+
 static BOOL settings_axonlite_can_poll_springboard(void)
 {
     // Locked-but-awake is the lockscreen — that's where Axon must run, so the
@@ -1085,6 +1296,8 @@ static void settings_stop_axonlite_then_forget_locked(const char *reason)
 
 static void settings_forget_springboard_tweak_state_locked(void)
 {
+    __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state, -1);
+    __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
     settings_each_springboard_cleanup_entry(^(const SettingsSpringBoardTweakCleanupEntry *entry) {
         if (entry->forget) entry->forget();
     });
@@ -1187,7 +1400,10 @@ static void settings_install_screen_awake_observers(void)
                                               &g_springboard_blanked_notify_token,
                                               dispatch_get_main_queue(), ^(int token) {
             (void)token;
-            if (settings_refresh_screen_awake_state("springboard.hasBlankedScreen")) {
+            BOOL woke = settings_refresh_screen_awake_state("springboard.hasBlankedScreen");
+            (void)settings_refresh_screen_lock_state("springboard.hasBlankedScreen");
+            settings_sync_fastlockx_lite_for_screen_state_async("springboard.hasBlankedScreen");
+            if (woke) {
                 settings_apply_statbar_once_async("screen awake");
                 settings_apply_nsbar_once_async("screen awake");
                 settings_apply_nicebarlite_once_async("screen awake");
@@ -1204,7 +1420,10 @@ static void settings_install_screen_awake_observers(void)
                                           &g_display_status_notify_token,
                                           dispatch_get_main_queue(), ^(int token) {
             (void)token;
-            if (settings_refresh_screen_awake_state("iokit.displayStatus")) {
+            BOOL woke = settings_refresh_screen_awake_state("iokit.displayStatus");
+            (void)settings_refresh_screen_lock_state("iokit.displayStatus");
+            settings_sync_fastlockx_lite_for_screen_state_async("iokit.displayStatus");
+            if (woke) {
                 settings_apply_statbar_once_async("screen awake");
                 settings_apply_nsbar_once_async("screen awake");
                 settings_apply_nicebarlite_once_async("screen awake");
@@ -1222,6 +1441,10 @@ static void settings_install_screen_awake_observers(void)
                                           dispatch_get_main_queue(), ^(int token) {
             (void)token;
             BOOL changed = settings_refresh_screen_lock_state("springboard.lockstate");
+            if (changed) {
+                (void)settings_refresh_screen_awake_state("springboard.lockstate");
+                settings_sync_fastlockx_lite_for_screen_state_async("springboard.lockstate");
+            }
             if (changed && g_screen_locked) {
                 // Stop the accelerometer before the XPC/shmem stack tears down on lock —
                 // otherwise the next callback fires into a stale shmem mapping.
@@ -1582,6 +1805,10 @@ static NSComparisonResult settings_compare_system_version(NSString *target)
 
 BOOL settings_device_supported(void)
 {
+#if CYANIDE_VPHONE_DEBUG
+    return YES;
+#endif
+
     BOOL ios17to18 =
         settings_compare_system_version(@"17.0") != NSOrderedAscending &&
         settings_compare_system_version(@"18.7.1") != NSOrderedDescending;
@@ -1596,6 +1823,9 @@ BOOL settings_device_supported(void)
 static NSString *settings_unsupported_message(void)
 {
     NSString *version = UIDevice.currentDevice.systemVersion ?: @"unknown";
+#if CYANIDE_VPHONE_DEBUG
+    return [NSString stringWithFormat:@"VPhone debug build is bypassing Cyanide's iOS version gate on iOS %@.", version];
+#endif
     return [NSString stringWithFormat:@"Not supported on iOS %@. Supported: iOS/iPadOS 17.0-18.7.1 or 26.0-26.0.1.", version];
 }
 
@@ -4185,9 +4415,8 @@ static void settings_start_themer_live_loop(void)
     if (settings_cleanup_in_progress()) return;
 
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    if (![d boolForKey:kSettingsThemerEnabled] &&
-        ![d boolForKey:kSettingsSnowBoardLiteEnabled]) return;
-    if (!g_springboard_rc_ready) return;
+    if (!settings_icon_theme_live_repair_enabled(d)) return;
+    if (!g_springboard_rc_ready && !settings_snowboardlite_should_release_repair_session(d)) return;
     if (settings_themer_dynamic_updates_blocked_by_stage(d)) {
         settings_note_themer_stage_conflict(YES);
         return;
@@ -4228,8 +4457,7 @@ static void settings_start_themer_live_loop(void)
                                                    settings_live_interval(kThemerLiveIntervalUS,
                                                                           kThemerLiveBackgroundIntervalUS),
                                                    &g_themer_live_stop_requested);
-            while (([d boolForKey:kSettingsThemerEnabled] ||
-                    [d boolForKey:kSettingsSnowBoardLiteEnabled]) &&
+            while (settings_icon_theme_live_repair_enabled(d) &&
                    !settings_themer_dynamic_updates_blocked_by_stage(d) &&
                    !settings_cleanup_in_progress() &&
                    !g_themer_live_stop_requested &&
@@ -4241,15 +4469,27 @@ static void settings_start_themer_live_loop(void)
                 @synchronized (settings_rc_lock()) {
                     if (g_themer_live_stop_requested) break;
                     if (!g_springboard_rc_ready) {
-                        printf("[SETTINGS] Themer dynamic loop has no SpringBoard RemoteCall session\n");
-                        failures++;
-                        break;
+                        if (settings_snowboardlite_should_release_repair_session(d) &&
+                            g_kexploit_done &&
+                            settings_ensure_springboard_remote_call_locked()) {
+                            printf("[SETTINGS] SnowBoard Lite repair tick opened temporary SpringBoard channel\n");
+                        } else {
+                            printf("[SETTINGS] Themer dynamic loop has no SpringBoard RemoteCall session\n");
+                            failures++;
+                            break;
+                        }
                     }
                     if (!g_kexploit_done || g_settings_actions_running) {
                         // Wait for actions to finish before next tick.
                         ok = true;
                     } else {
                         ok = themer_repaint_dynamic_cached_views_in_session();
+                    }
+                    if (settings_snowboardlite_should_release_repair_session(d) &&
+                        g_springboard_rc_ready) {
+                        settings_destroy_springboard_remote_call_locked_internal_ex("SnowBoard Lite repair tick",
+                                                                                   YES,
+                                                                                   YES);
                     }
                 }
 
@@ -4259,8 +4499,7 @@ static void settings_start_themer_live_loop(void)
                 failures = ok ? 0 : failures + 1;
 
                 tick++;
-                if ((![d boolForKey:kSettingsThemerEnabled] &&
-                     ![d boolForKey:kSettingsSnowBoardLiteEnabled]) ||
+                if (!settings_icon_theme_live_repair_enabled(d) ||
                     settings_themer_dynamic_updates_blocked_by_stage(d) ||
                     g_themer_live_stop_requested ||
                     tick >= maxTicks) break;
@@ -4276,7 +4515,7 @@ static void settings_start_themer_live_loop(void)
             }
             printf("[SETTINGS] Themer dynamic live loop exited ticks=%lu enabled=%d failures=%lu stop=%d\n",
                    (unsigned long)tick,
-                   [d boolForKey:kSettingsThemerEnabled] || [d boolForKey:kSettingsSnowBoardLiteEnabled],
+                   settings_icon_theme_live_repair_enabled(d),
                    (unsigned long)failures,
                    g_themer_live_stop_requested);
             __sync_lock_release(&g_themer_live_running);
@@ -4291,9 +4530,8 @@ static void settings_schedule_themer_repair_burst_internal(const char *reason, B
     if (settings_cleanup_in_progress()) return;
 
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    if (![d boolForKey:kSettingsThemerEnabled] &&
-        ![d boolForKey:kSettingsSnowBoardLiteEnabled]) return;
-    if (!g_springboard_rc_ready) return;
+    if (!settings_icon_theme_live_repair_enabled(d)) return;
+    if (!g_springboard_rc_ready && !settings_snowboardlite_should_release_repair_session(d)) return;
     if (settings_themer_dynamic_updates_blocked_by_stage(d)) {
         settings_note_themer_stage_conflict(force);
         return;
@@ -4311,8 +4549,7 @@ static void settings_schedule_themer_repair_burst_internal(const char *reason, B
                reason ? ": " : "", reason ?: "");
 
         @try {
-            while (([d boolForKey:kSettingsThemerEnabled] ||
-                    [d boolForKey:kSettingsSnowBoardLiteEnabled]) &&
+            while (settings_icon_theme_live_repair_enabled(d) &&
                    !settings_themer_dynamic_updates_blocked_by_stage(d) &&
                    !settings_cleanup_in_progress() &&
                    !g_themer_live_stop_requested &&
@@ -4326,11 +4563,22 @@ static void settings_schedule_themer_repair_burst_internal(const char *reason, B
 
                 bool ok = false;
                 @synchronized (settings_rc_lock()) {
+                    if (!g_springboard_rc_ready &&
+                        settings_snowboardlite_should_release_repair_session(d) &&
+                        g_kexploit_done) {
+                        (void)settings_ensure_springboard_remote_call_locked();
+                    }
                     if (!g_springboard_rc_ready || !g_kexploit_done ||
                         g_settings_actions_running) {
                         ok = true;
                     } else {
                         ok = themer_repaint_dynamic_cached_views_in_session();
+                    }
+                    if (settings_snowboardlite_should_release_repair_session(d) &&
+                        g_springboard_rc_ready) {
+                        settings_destroy_springboard_remote_call_locked_internal_ex("SnowBoard Lite repair burst",
+                                                                                   YES,
+                                                                                   YES);
                     }
                 }
 
@@ -4416,10 +4664,10 @@ void settings_application_did_enter_background(void)
     if (settings_cleanup_in_progress()) return;
 
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-    BOOL themerLiveNeeded = g_springboard_rc_ready &&
+    BOOL themerLiveNeeded =
         !settings_themer_dynamic_updates_blocked_by_stage(d) &&
-        ([d boolForKey:kSettingsThemerEnabled] ||
-         [d boolForKey:kSettingsSnowBoardLiteEnabled]);
+        ((settings_themer_live_repair_enabled(d) && g_springboard_rc_ready) ||
+         settings_snowboardlite_live_repair_enabled(d));
     BOOL anyLiveLoopNeeded =
         ([d boolForKey:kSettingsAxonLiteEnabled]    && g_springboard_rc_ready) ||
         (settings_rssi_install_allowed() && [d boolForKey:kSettingsRSSIDisplayEnabled] && g_springboard_rc_ready) ||
@@ -4451,6 +4699,9 @@ void settings_application_did_enter_background(void)
             settings_apply_armed_gravitylite_once_async("entered background");
         }
     }
+    (void)settings_refresh_screen_awake_state("entered background");
+    (void)settings_refresh_screen_lock_state("entered background");
+    settings_sync_fastlockx_lite_for_screen_state_async("entered background");
     if (settings_rssi_install_allowed() && [d boolForKey:kSettingsRSSIDisplayEnabled] && g_springboard_rc_ready) {
         settings_apply_rssi_once_async("entered background");
     }
@@ -4482,6 +4733,9 @@ void settings_application_will_enter_foreground(void)
     settings_apply_nicebarlite_once_async("will enter foreground");
     settings_apply_rssi_once_async("will enter foreground");
     settings_apply_axonlite_once_async("will enter foreground");
+    (void)settings_refresh_screen_awake_state("will enter foreground");
+    (void)settings_refresh_screen_lock_state("will enter foreground");
+    settings_sync_fastlockx_lite_for_screen_state_async("will enter foreground");
     if (settings_notificationisland_install_allowed() &&
         [[NSUserDefaults standardUserDefaults] boolForKey:kSettingsNotificationIslandEnabled] &&
         g_springboard_rc_ready) {
@@ -4505,6 +4759,9 @@ void settings_application_did_become_active(void)
     settings_apply_nicebarlite_once_async("became active");
     settings_apply_rssi_once_async("became active");
     settings_apply_axonlite_once_async("became active");
+    (void)settings_refresh_screen_awake_state("became active");
+    (void)settings_refresh_screen_lock_state("became active");
+    settings_sync_fastlockx_lite_for_screen_state_async("became active");
     if (settings_notificationisland_install_allowed() &&
         [[NSUserDefaults standardUserDefaults] boolForKey:kSettingsNotificationIslandEnabled] &&
         g_springboard_rc_ready) {
@@ -4525,6 +4782,29 @@ static BOOL settings_key_is_sbc(NSString *key)
            [key isEqualToString:kSettingsSBCCols] ||
            [key isEqualToString:kSettingsSBCRows] ||
            [key isEqualToString:kSettingsSBCHideLabels];
+}
+
+static BOOL settings_key_is_sbc_configuration(NSString *key)
+{
+    return [key isEqualToString:kSettingsSBCDockIcons] ||
+           [key isEqualToString:kSettingsSBCCols] ||
+           [key isEqualToString:kSettingsSBCRows] ||
+           [key isEqualToString:kSettingsSBCHideLabels];
+}
+
+static void settings_note_package_configuration_changed(NSString *key)
+{
+    if (settings_key_is_sbc_configuration(key)) {
+        // SBCustomizer persists its applied marker across Cyanide relaunches
+        // so a just-applied layout does not immediately requeue. A later
+        // configuration edit is new desired state, though, so invalidate the
+        // marker and let the Installer show a refresh/apply action again.
+        settings_mark_tweak_applied(kSettingsSBCEnabled, NO);
+        printf("[SETTINGS] SBC config changed via %s; marked layout refresh pending\n",
+               key.UTF8String);
+        log_user("[SBCUSTOMIZER] Settings changed — layout refresh is pending.\n");
+        settings_notify_package_queue_changed_async();
+    }
 }
 
 static BOOL settings_key_is_statbar(NSString *key)
@@ -5503,6 +5783,9 @@ static void settings_schedule_live_apply_for_key(NSString *key)
             settings_mark_tweak_applied(kSettingsSBCEnabled,
                                         ok && [d boolForKey:kSettingsSBCEnabled]);
             printf("[SETTINGS] live SBC apply result=%d\n", ok);
+            log_user("%s SBCustomizer settings %s live through SpringBoard.\n",
+                     ok ? "[OK]" : "[WARN]",
+                     ok ? "applied" : "did not apply; leaving refresh pending");
         }
         settings_notify_package_queue_changed_async();
     });
@@ -5771,20 +6054,27 @@ static void settings_run_actions_internal(BOOL pendingOnly)
             BOOL runLiveWP = settings_enabled_tweak_should_run(d, kSettingsLiveWPEnabled, springBoardPendingOnly);
             BOOL runLayoutExtras = settings_enabled_tweak_should_run(d, kSettingsLayoutExtrasEnabled, springBoardPendingOnly);
             BOOL runStageStrip = settings_stagestrip_install_allowed() && settings_enabled_tweak_should_run(d, kSettingsStageStripEnabled, springBoardPendingOnly);
+            BOOL runFastLockXLite = settings_fastlockx_lite_install_allowed() && settings_enabled_tweak_should_run(d, kSettingsFastLockXLiteEnabled, springBoardPendingOnly);
             BOOL runGravityLite = settings_enabled_tweak_should_run(d, kSettingsGravityLiteEnabled, springBoardPendingOnly);
             BOOL stagePausesThemerLive = settings_themer_dynamic_updates_blocked_by_stage(d);
             if (stagePausesThemerLive) {
                 settings_note_themer_stage_conflict(YES);
             }
             BOOL cleanupDisabledSpringBoardTweaks = settings_disabled_applied_springboard_cleanup_needed(d);
-            BOOL needsSpringBoardWork = runSBC || runDarkTweaks || runStatBar || runNSBar || runNiceBarLite || runRSSI || runAxonLite || runGravityLite || runLayoutExtras || runTypeBanner || runNotificationIsland || runAppSwitcherGrid || runThemer || runSnowBoardLite || runLiveWP || runStageStrip || cleanupDisabledSpringBoardTweaks;
+            BOOL needsSpringBoardWork = runSBC || runDarkTweaks || runStatBar || runNSBar || runNiceBarLite || runRSSI || runAxonLite || runGravityLite || runLayoutExtras || runTypeBanner || runNotificationIsland || runAppSwitcherGrid || runThemer || runSnowBoardLite || runLiveWP || runStageStrip || runFastLockXLite || cleanupDisabledSpringBoardTweaks;
             BOOL runSandboxEscape = [d boolForKey:kSettingsRunSandboxEscape] && (!pendingOnly || needsSpringBoardWork);
             // TypeBanner prewarms its hidden SpringBoard window during Apply
             // and reuses the open SpringBoard session for text-only updates.
             BOOL needsSpringBoard = runSandboxEscape || needsSpringBoardWork || forceSpringBoardRefresh;
 
             BOOL hasRunWork = patchSandboxExt || runPowercuff || needsSpringBoard;
-            NSUInteger total = hasRunWork ? 1 : 0;
+            BOOL skipKernelForVPhoneSpringBoardOnly =
+                cyanide_vphone_debug_build() &&
+                needsSpringBoard &&
+                !patchSandboxExt &&
+                !runPowercuff;
+            BOOL needsKernelPrimitiveStage = hasRunWork && !skipKernelForVPhoneSpringBoardOnly;
+            NSUInteger total = needsKernelPrimitiveStage ? 1 : 0;
             if (patchSandboxExt) total++;
             if (runPowercuff) total++;
             if (needsSpringBoard) total++;
@@ -5805,6 +6095,7 @@ static void settings_run_actions_internal(BOOL pendingOnly)
             if (runNotificationIsland) total++;
             if (runAppSwitcherGrid) total++;
             if (runStageStrip) total++;
+            if (runFastLockXLite) total++;
             if (cleanupDisabledSpringBoardTweaks) total++;
             NSUInteger step = 0;
             BOOL startStageStripControlLoopAfterInstall = NO;
@@ -5827,12 +6118,16 @@ static void settings_run_actions_internal(BOOL pendingOnly)
             if (runSnowBoardLite) [enabledTweaks addObject:@"snowboardlite"];
             if (runLiveWP) [enabledTweaks addObject:@"livewp"];
             if (runTypeBanner) [enabledTweaks addObject:@"typebanner"];
+            if (runFastLockXLite) [enabledTweaks addObject:@"fastlockx"];
             if (runStageStrip) [enabledTweaks addObject:@"stagestrip"];
             if (cleanupDisabledSpringBoardTweaks) [enabledTweaks addObject:@"cleanup"];
             if (forceSpringBoardRefresh) [enabledTweaks addObject:@"springboard-refresh"];
             log_user("[PLAN] %lu stages: %s\n",
                      (unsigned long)total,
                      enabledTweaks.count ? [[enabledTweaks componentsJoinedByString:@", "] UTF8String] : "none");
+            if (runFastLockXLite && runStageStrip) {
+                log_user("[COMPAT] FastLockX Lite will arm before Dynamic Stage Lite starts its control loop.\n");
+            }
             cyanide_upload_log_milestone(@"run-plan");
 
             if (!hasRunWork) {
@@ -5854,15 +6149,20 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                 return;
             }
 
-            settings_progress(&step, total, "Racing kernel allocator for r/w primitives");
-            if (!settings_ensure_kexploit()) {
-                log_user("[RUN] Failed: kernel primitives were not acquired. Please try running chain again.\n");
-                runCompletionMessage = @"Failed: kernel primitives were not acquired. Please try running chain again.";
-                cyanide_upload_log_milestone(@"krw-failed");
-                return;
+            if (needsKernelPrimitiveStage) {
+                settings_progress(&step, total, "Racing kernel allocator for r/w primitives");
+                if (!settings_ensure_kexploit()) {
+                    log_user("[RUN] Failed: kernel primitives were not acquired. Please try running chain again.\n");
+                    runCompletionMessage = @"Failed: kernel primitives were not acquired. Please try running chain again.";
+                    cyanide_upload_log_milestone(@"krw-failed");
+                    return;
+                }
+                log_user("[OK] Kernel r/w armed — injection staged.\n");
+                cyanide_upload_log_milestone(@"krw-ready");
+            } else if (skipKernelForVPhoneSpringBoardOnly) {
+                log_user("[VPHONE] SpringBoard-only run — using the vphone bridge without app-side kernel primitives.\n");
+                cyanide_upload_log_milestone(@"vphone-bridge-no-krw");
             }
-            log_user("[OK] Kernel r/w armed — injection staged.\n");
-            cyanide_upload_log_milestone(@"krw-ready");
 
             if (patchSandboxExt) {
                 settings_progress(&step, total, "Patching sandbox-extension issue path");
@@ -6011,7 +6311,8 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                                  ok ? "[OK]" : "[WARN]",
                                  ok ? "theme applied" : "did not apply cleanly");
                         cyanide_upload_log_milestone(ok ? @"snowboard-lite-applied" : @"snowboard-lite-warning");
-                        if (ok) {
+                        if (ok && !settings_themer_live_repair_enabled(d)) {
+                            log_user("[SBL] Live repair is enabled; Cyanide will release the SpringBoard channel between repair ticks for stability.\n");
                             settings_start_themer_live_loop();
                         }
                     }
@@ -6161,9 +6462,45 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                         appswitchergrid_stop_in_session();
                     }
 
+                    if (runFastLockXLite) {
+                        settings_progress(&step, total, "Enabling FastLockX Lite Always On");
+                        FastLockXLiteConfig config = settings_fastlockx_lite_config_from_defaults(d, YES, YES);
+                        config.diagnosticLogging = NO;
+                        bool ok = fastlockx_lite_enable_always_on_in_session(config);
+                        if (ok) {
+                            (void)settings_refresh_screen_awake_state("fastlockx install");
+                            (void)settings_refresh_screen_lock_state("fastlockx install");
+                            BOOL active = !settings_screen_awake_cached() && settings_screen_locked_cached();
+                            bool syncOK = fastlockx_lite_set_always_on_active_in_session(active);
+                            __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state,
+                                                     syncOK ? (active ? 1 : 0) : -1);
+                            __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
+                            printf("[SETTINGS] FastLockX initial screen sync active=%d awake=%d locked=%d ok=%d\n",
+                                   active,
+                                   settings_screen_awake_cached(),
+                                   settings_screen_locked_cached(),
+                                   syncOK);
+                        }
+                        settings_mark_tweak_applied(kSettingsFastLockXLiteEnabled,
+                                                    ok && [d boolForKey:kSettingsFastLockXLiteEnabled]);
+                        printf("[SETTINGS] FastLockX Lite result=%d\n", ok);
+                        log_user("%s FastLockX Lite Always On %s.\n",
+                                 ok ? "[OK]" : "[WARN]",
+                                 ok ? "enabled" : "did not install cleanly");
+                        cyanide_upload_log_milestone(ok ? @"fastlockx-lite-applied" :
+                                                         @"fastlockx-lite-failed");
+                    }
+
                     if (runStageStrip) {
                         settings_progress(&step, total, "Installing Dynamic Stage Lite");
+                        BOOL skipStageDeferredLibrary = settings_fastlockx_lite_install_allowed() &&
+                            [d boolForKey:kSettingsFastLockXLiteEnabled];
+                        if (skipStageDeferredLibrary) {
+                            log_user("[COMPAT] Dynamic Stage Lite will skip background App Library tile fill-in while FastLockX Lite is active.\n");
+                        }
+                        stagestrip_set_deferred_library_build_enabled(!skipStageDeferredLibrary);
                         bool ok = stagestrip_apply_in_session(4);
+                        stagestrip_set_deferred_library_build_enabled(true);
                         startStageStripControlLoopAfterInstall = ok;
                         settings_mark_tweak_applied(kSettingsStageStripEnabled,
                                                     ok && [d boolForKey:kSettingsStageStripEnabled]);
@@ -6237,6 +6574,23 @@ static void settings_run_actions_internal(BOOL pendingOnly)
             }
             if (runStatBar || runNSBar || runNiceBarLite || runRSSI || runAxonLite || runTypeBanner || runNotificationIsland || runLiveWP || startStageStripControlLoopAfterInstall)
                 cyanide_upload_log_milestone(@"live-tweaks-started");
+
+            if (settings_snowboardlite_should_release_repair_session(d)) {
+                BOOL closedSnowBoardRepairRemoteCall = NO;
+                @synchronized (settings_rc_lock()) {
+                    if (settings_snowboardlite_should_release_repair_session(d) &&
+                        g_springboard_rc_ready) {
+                        settings_destroy_springboard_remote_call_locked_internal_ex("SnowBoard Lite post-apply repair handoff",
+                                                                                   YES,
+                                                                                   YES);
+                        closedSnowBoardRepairRemoteCall = YES;
+                    }
+                }
+                if (closedSnowBoardRepairRemoteCall) {
+                    log_user("[SBL] SpringBoard channel released; live repair will reopen it only for repair ticks.\n");
+                    cyanide_upload_log_milestone(@"snowboard-lite-repair-channel-released");
+                }
+            }
 
             if (!settings_has_persistent_springboard_remote_call_user()) {
                 BOOL closedNonLiveRemoteCall = NO;
@@ -7467,7 +7821,7 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         @{ @"kind": @"number",
            @"key": kSettingsFastLockXLiteRetryInterval,
            @"title": @"Retry interval",
-           @"subtitle": @"Always On uses this as the off→on pulse gap. Default 0.3s.",
+           @"subtitle": @"Always On uses this as the off→on pulse gap. Default is 0.3s.",
            @"min": @0.1, @"max": @2.0, @"step": @0.1, @"unit": @"s", @"precision": @1, @"default": @0.3 },
         @{ @"key": kSettingsFastLockXLiteBlockMusic,
            @"title": @"Block if media is active — In progress",
@@ -7529,7 +7883,7 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         BOOL alwaysOnIntent = [d boolForKey:kSettingsFastLockXLiteEnabled];
         BOOL alwaysOnApplied = settings_tweak_is_applied(kSettingsFastLockXLiteEnabled);
         [out addObject:@{@"title": @"Always On",
-                         @"value": alwaysOnApplied ? @"Enabled" : (alwaysOnIntent ? @"Unknown" : @"Off")}];
+                         @"value": alwaysOnApplied ? @"Enabled" : (alwaysOnIntent ? @"Queued" : @"Off")}];
         [out addObject:@{@"title": @"Retry interval",
                          @"value": [NSString stringWithFormat:@"%.1fs", settings_fastlockx_lite_retry_interval(d)]}];
         [out addObject:@{@"title": @"Blockers",
@@ -7850,7 +8204,7 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
                @"Custom themes can be a folder of PNG files named by bundle ID, such as com.apple.mobilesafari.png, or a binary plist mapping bundle IDs to PNG data. Import copies the theme into Cyanide's Documents/Themes folder. Theme Format Guide includes examples and plist exports.";
     }
     if (s == SectionSnowBoardLite) {
-        return @"SnowBoard/IconBundles importer ported from d1y/cyanide-ios. Folder imports are copied into Cyanide's Documents/SnowBoardLite library and applied through the existing icon replacement pipeline.\n\nThe import copies theme assets into Cyanide's local storage so the original theme in Files is not changed.\n\nCompatibility: when Dynamic Stage Lite is enabled, live icon repair is paused to avoid SpringBoard resprings. The selected theme still applies once.";
+        return @"SnowBoard/IconBundles importer ported from d1y/cyanide-ios. Folder imports are copied into Cyanide's Documents/SnowBoardLite library and applied through the existing icon replacement pipeline.\n\nThe import copies theme assets into Cyanide's local storage so the original theme in Files is not changed.\n\nCompatibility: SnowBoard Lite keeps live icon repair active, but releases the SpringBoard channel between repair ticks for stability. Re-run it after a respring if icons reset. Dynamic Stage Lite can stay enabled because SnowBoard Lite no longer keeps a persistent live repair session open.";
     }
     if (s == SectionLiveWP) {
         return @"Video wallpaper ported from d1y/cyanide-ios. Select an MP4, MOV, or M4V; Cyanide copies it into Documents/LiveWP and plays it in SpringBoard while the RemoteCall session stays alive.";
@@ -10326,6 +10680,7 @@ void cyanide_present_contact(UIViewController *host)
     NSString *key = row[@"key"];
     [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:key];
     printf("[SETTINGS] toggle %s=%d\n", key.UTF8String, sender.isOn);
+    settings_note_package_configuration_changed(key);
     if ([key isEqualToString:kSettingsKeepAlive]) {
         ds_keepalive_apply_enabled(sender.isOn);
         return;
@@ -10365,6 +10720,7 @@ void cyanide_present_contact(UIViewController *host)
     BOOL showLocationLog = settings_key_is_location_sim(key) && settings_location_sim_is_active(d);
     [d setInteger:value forKey:key];
     printf("[SETTINGS] slider %s=%ld\n", key.UTF8String, (long)value);
+    settings_note_package_configuration_changed(key);
     if (showLocationLog) {
         [self presentActivityLogWithCompletion:^{
             settings_schedule_live_apply_for_key(key);
@@ -10448,6 +10804,7 @@ void cyanide_present_contact(UIViewController *host)
 
         NSString *valueText = settings_number_row_value_string(row, value, YES);
         printf("[SETTINGS] number %s=%s\n", key.UTF8String, valueText.UTF8String);
+        settings_note_package_configuration_changed(key);
         settings_schedule_live_apply_for_key(key);
         [strongSelf reloadSectionOrAll:section];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(250 * NSEC_PER_MSEC)),
@@ -11268,6 +11625,7 @@ void cyanide_present_contact(UIViewController *host)
     // NanoRegistry steppers are seed values for an explicit Apply button;
     // they don't drive a live SpringBoard RC loop, so skip the auto-apply.
     NSString *key = row[@"key"];
+    settings_note_package_configuration_changed(key);
     BOOL isNano = [key isEqualToString:kSettingsNanoMaxPairing]
                 || [key isEqualToString:kSettingsNanoMinPairing]
                 || [key isEqualToString:kSettingsNanoMinPairingChipID]
@@ -11894,6 +12252,8 @@ void cyanide_present_contact(UIViewController *host)
 
                     if (disableAlways) {
                         bool ok = fastlockx_lite_disable_always_on_in_session();
+                        __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state, -1);
+                        __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
                         if (ok) {
                             [d setBool:NO forKey:kSettingsFastLockXLiteEnabled];
                             [d synchronize];
@@ -11904,12 +12264,27 @@ void cyanide_present_contact(UIViewController *host)
                                  ok ? "[OK]" : "[WARN]",
                                  ok ? "disabled" : "could not be disabled; respring will stop it");
                     } else if (enableAlways) {
+                        [d setBool:YES forKey:kSettingsFastLockXLiteEnabled];
+                        [d synchronize];
                         FastLockXLiteConfig config = settings_fastlockx_lite_config_from_defaults(d, YES, YES);
                         config.diagnosticLogging = NO;
                         bool ok = fastlockx_lite_enable_always_on_in_session(config);
-                        [d setBool:ok forKey:kSettingsFastLockXLiteEnabled];
-                        [d synchronize];
-                        settings_mark_tweak_applied(kSettingsFastLockXLiteEnabled, ok);
+                        if (ok) {
+                            (void)settings_refresh_screen_awake_state("fastlockx direct enable");
+                            (void)settings_refresh_screen_lock_state("fastlockx direct enable");
+                            BOOL active = !settings_screen_awake_cached() && settings_screen_locked_cached();
+                            bool syncOK = fastlockx_lite_set_always_on_active_in_session(active);
+                            __sync_lock_test_and_set(&g_fastlockx_lite_remote_active_state,
+                                                     syncOK ? (active ? 1 : 0) : -1);
+                            __sync_lock_test_and_set(&g_fastlockx_lite_last_unlock_nudge_ms, 0);
+                            printf("[SETTINGS] FastLockX direct screen sync active=%d awake=%d locked=%d ok=%d\n",
+                                   active,
+                                   settings_screen_awake_cached(),
+                                   settings_screen_locked_cached(),
+                                   syncOK);
+                        }
+                        settings_mark_tweak_applied(kSettingsFastLockXLiteEnabled,
+                                                    ok && [d boolForKey:kSettingsFastLockXLiteEnabled]);
                         settings_notify_package_queue_changed_async();
                         log_user("%s FastLockX Lite Always On %s.\n",
                                  ok ? "[OK]" : "[WARN]",

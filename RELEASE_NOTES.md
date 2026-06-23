@@ -29,32 +29,26 @@ omit it.
 
 ## Pending
 
+- [ ] Fixed kernel setup hanging after IOSurface mapping creation fails; Cyanide now shows a clean failure instead of spinning.
 
+- [ ] Fixed SnowBoard Lite causing delayed SpringBoard resprings by keeping live repair active while releasing the SpringBoard channel between repair ticks.
+- [ ] Fixed SBCustomizer staying queued after a successful Home Screen Layout apply when Cyanide is relaunched during the run.
+- [ ] Fixed SpringBoard crashes on vphone while applying SBCustomizer by routing SpringBoard tweak calls through the vphone bridge more safely.
+- [ ] Fixed SBCustomizer setting changes not re-queueing a refresh after SBCustomizer had already been applied once.
 
 ## Released
 
-### v1.2.25 - 2026-06-17
-
-- [x] Fixed a hang and SpringBoard crash when applying layout, icon, or theme tweaks that read the SpringBoard view hierarchy.
-- [x] FastLockX Lite now defaults to a 0.3s retry interval for a faster pickup-to-unlock pulse.
-
-### v1.2.24 - 2026-06-13
-
-- [x] Reverted FastLockX Lite back to its original release behavior; we do not recommend installing it with other persistent RemoteCall tweaks for now.
-
-### v1.2.23 - 2026-06-13
-
-- [x] Fixed Hide Home Bar causing a kernel panic.
-- [x] Improved FastLockX Lite safety and reliability with a stacking warning, Notification Center guard, and reduced spurious unlock attempts.
-- [x] Fixed SnowBoard Lite causing delayed SpringBoard resprings after applying a theme.
-- [x] Improved Dynamic Stage Lite resizing so hosted app content fits inside resized windows instead of cropping or zooming.
-
 ### v1.2.22 - 2026-06-12
 
-- [x] FastLockX Lite now installs through the normal Apply Tweaks queue and uses the shared SpringBoard setup with other runtime tweaks.
-- [x] Improved FastLockX Lite lock/unlock behavior, including paused pulses while unlocked, better retry resume after locking, and more reliable Face ID unlock nudges.
-- [x] Improved Dynamic Stage Lite compatibility with FastLockX Lite by arming FastLockX first, avoiding background App Library tile fill-in, and preserving stage windows across lock/sleep.
-- [x] Improved exploit-chain stability around memory setup and Hide Home Bar page-zero writes.
+- [x] Made FastLockX Lite install through the normal Apply Tweaks queue so it uses the shared SpringBoard setup with other runtime tweaks.
+- [x] Paused FastLockX Lite retry pulses while the device is unlocked.
+- [x] Improved Hide Home Bar page zeroing stability with a DirtyZero-style single-page write path and verified fallback.
+- [x] Improved kernel setup stability when preparing the memory-racing stage.
+- [x] Improved FastLockX Lite compatibility with Dynamic Stage Lite by finishing FastLockX setup before Dynamic Stage starts its live control loop.
+- [x] Fixed FastLockX Lite not resuming its retry pulse after the device locks on iOS 18.
+- [x] Prevented Dynamic Stage Lite from background-filling App Library tiles while FastLockX Lite is active to avoid SpringBoard restarts.
+- [x] Fixed Dynamic Stage Lite windows being torn down when the device locks or the screen sleeps.
+- [x] Improved FastLockX Lite unlock reliability by debouncing lock-screen timer sync and using no-wake unlock nudges when Face ID leaves the lock screen awake.
 
 ### v1.2.21 - 2026-06-12
 

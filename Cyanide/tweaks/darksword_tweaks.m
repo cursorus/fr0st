@@ -441,21 +441,25 @@ bool darksword_tweak_double_tap_to_lock_in_session(void)
         ok |= (ds_install_double_tap_on_view(homeView, sb, selLock, assocKey, "homescreen", true) != DTLockOutcomeFailed);
     }
 
-    uint64_t app = r_msg2(r_class("UIApplication"), "sharedApplication", 0, 0, 0, 0);
-    uint64_t windows = ds_try_msg0(app, "windows");
-    uint64_t count = ds_try_msg0(windows, "count");
-    uint64_t limit = count < 20 ? count : 20;
-    int removed = 0, skipped = 0;
-    for (uint64_t i = 0; i < limit; i++) {
-        uint64_t win = r_msg2(windows, "objectAtIndex:", i, 0, 0, 0);
-        if (!r_is_objc_ptr(win) || win == homeView) { skipped++; continue; }
+    if (remote_call_uses_vphone_bridge()) {
+        printf("[DST:LOCK] vphone: skipped UIApplication windows cleanup\n");
+    } else {
+        uint64_t app = r_msg2(r_class("UIApplication"), "sharedApplication", 0, 0, 0, 0);
+        uint64_t windows = ds_try_msg0(app, "windows");
+        uint64_t count = ds_try_msg0(windows, "count");
+        uint64_t limit = count < 20 ? count : 20;
+        int removed = 0, skipped = 0;
+        for (uint64_t i = 0; i < limit; i++) {
+            uint64_t win = r_msg2(windows, "objectAtIndex:", i, 0, 0, 0);
+            if (!r_is_objc_ptr(win) || win == homeView) { skipped++; continue; }
 
-        char tag[32];
-        snprintf(tag, sizeof(tag), "window[%llu]", i);
-        if (ds_remove_double_tap_from_view(win, assocKey, tag)) removed++;
+            char tag[32];
+            snprintf(tag, sizeof(tag), "window[%llu]", i);
+            if (ds_remove_double_tap_from_view(win, assocKey, tag)) removed++;
+        }
+        printf("[DST:LOCK] windows scanned=%llu removed=%d skipped=%d\n",
+               limit, removed, skipped);
     }
-    printf("[DST:LOCK] windows scanned=%llu removed=%d skipped=%d\n",
-           limit, removed, skipped);
 
     printf("[DST:LOCK] result=%d\n", ok);
     return ok;
