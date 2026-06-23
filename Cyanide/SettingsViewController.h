@@ -87,6 +87,10 @@ extern NSString * const kSettingsSnowBoardLiteSelectedThemeID;
 extern NSString * const kSettingsLiveWPEnabled;
 extern NSString * const kSettingsLiveWPVideoPath;
 
+extern NSString * const kSettingsQuickLoaderEnabled;
+
+extern NSString * const kSettingsRepoTweaksEnabled;
+
 extern NSString * const kSettingsExperimentalTweaksEnabled;
 
 extern NSString * const kSettingsLogUploadEnabled;

@@ -1,0 +1,34 @@
+name: Build Cyanide
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS App
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Public Submodules (Ignore Private)
+        run: git submodule update --init --recursive || true
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Make build script executable
+        run: chmod +x ./scripts/build.sh
+
+      - name: Compile Cyanide (Unsigned)
+        run: ./scripts/build.sh
+        
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cyanide-TweakRunner
+          path: build/Cyanide.ipa
+          retention-days: 7

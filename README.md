@@ -246,3 +246,17 @@ fetch the submodule, and private-submodule tweaks will be absent from local
 builds unless you re-implement them. Public Beta features, including Location
 Simulator and Call Recording Sound, build from the open-source tree. The public
 app target still builds without that submodule.
+
+## Experimental JavaScript Tweaks
+
+Cyanide includes two experimental JavaScript tweak runners contributed by
+Iggy05:
+
+- **QuickLoader** imports a local `.js` file from Files and exposes declared
+  `@param` values as settings rows.
+- **RepoTweaks Store** imports HTTPS JSON repositories and downloads selected
+  JavaScript tweaks from those sources.
+
+These tools are hidden behind Cyanide's Experimental Tweaks gate. Only run
+scripts and repositories you trust; JavaScript tweaks can call Cyanide
+RemoteCall helpers and may destabilize SpringBoard if the script is buggy.

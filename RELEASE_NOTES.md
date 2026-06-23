@@ -29,6 +29,7 @@ omit it.
 
 ## Pending
 
+- [ ] Added experimental QuickLoader and RepoTweaks JavaScript tweak runners, available behind the Experimental Tweaks gate with local file imports and HTTPS repository sources.
 - [ ] Fixed kernel setup hanging after IOSurface mapping creation fails; Cyanide now shows a clean failure instead of spinning.
 
 - [ ] Fixed SnowBoard Lite causing delayed SpringBoard resprings by keeping live repair active while releasing the SpringBoard channel between repair ticks.
