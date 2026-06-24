@@ -32,6 +32,13 @@ omit it.
 
 ## Released
 
+### v1.3.3 - 2026-06-24
+
+- [x] Repo tweak detail view now shows the actual tweak description instead of generic install text.
+- [x] Cleaned up tweak detail view styling — larger, more readable description and info text.
+- [x] Source refresh on update forces repo cache repopulation so per-tweak icons and authors appear immediately.
+- [x] Package icon badges now cycle through a spectrum of colors across all list views.
+
 ### v1.3.2 - 2026-06-24
 
 - [x] Redesigned Home, Packages, and Sources tabs with a unified visual style — gradient hero, colored icon badges, bold section headers, and compact list cells.

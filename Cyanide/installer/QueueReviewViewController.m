@@ -470,7 +470,7 @@ static BOOL QueuePackageIsHideHomeBar(Package *pkg)
             break;
     }
     cell.detailTextLabel.font = [UIFont systemFontOfSize:12.0];
-    UIColor *queueIconColor = (s == QueueReviewSectionReApply) ? UIColor.tertiaryLabelColor : self.view.tintColor;
+    UIColor *queueIconColor = (s == QueueReviewSectionReApply) ? UIColor.tertiaryLabelColor : CYSpectrumColor((NSUInteger)indexPath.row);
     cell.imageView.image = CYIconBadgeImage(pkg.symbolName, queueIconColor, 32.0);
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.accessoryView = nil;

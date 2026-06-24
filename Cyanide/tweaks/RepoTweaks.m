@@ -20,7 +20,7 @@ static const NSUInteger kRepoTweaksMaxRepoBytes = 512 * 1024;
 static const NSUInteger kRepoTweaksMaxScriptBytes = 512 * 1024;
 static NSString * const kRepoTweaksDefaultRepoURL = @"https://zeroxjf.github.io/cyanide-repotweaks.json";
 static NSString * const kRepoTweaksDefaultReposSeedVersionKey = @"RepoTweaksDefaultReposSeedVersion";
-static NSString * const kRepoTweaksDefaultReposSeedVersion = @"3";
+static NSString * const kRepoTweaksDefaultReposSeedVersion = @"4";
 static NSString * const kRepoTweaksHideHomeBarMaterialKitAssets =
     @"/System/Library/PrivateFrameworks/MaterialKit.framework/Assets.car";
 

@@ -90,9 +90,9 @@ static BOOL PackageRepoScriptRequiresNativeBridge(NSString *rawScript)
                               repoScriptURL:(NSString *)repoScriptURL
 {
     NSString *source = repoName.length ? repoName : @"Repo Source";
-    NSString *longDescription = [NSString stringWithFormat:
-        @"Installs this tweak from %@ through Cyanide's normal package queue. Configure any options below, then tap Install to queue it.\n\nOnly install scripts from sources you trust. JavaScript tweaks run with Cyanide's SpringBoard helpers.",
-        source];
+    NSString *longDescription = shortDescription.length > 0
+        ? shortDescription
+        : @"JavaScript tweak from a source.";
 
     if ((self = [self initWithIdentifier:identifier
                                     name:name.length ? name : repoTweakID

@@ -186,19 +186,19 @@ typedef NS_ENUM(NSInteger, PackagesSection) {
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    if ([self isSearchActive]) return [self packageCellForPackage:self.searchResults[indexPath.row] tableView:tableView];
-    if (indexPath.section == PackagesSectionNew) return [self packageCellForPackage:self.recentPackages[indexPath.row] tableView:tableView];
-    return [self packageCellForPackage:self.allPackagesSorted[indexPath.row] tableView:tableView];
+    if ([self isSearchActive]) return [self packageCellForPackage:self.searchResults[indexPath.row] colorIndex:(NSUInteger)indexPath.row tableView:tableView];
+    if (indexPath.section == PackagesSectionNew) return [self packageCellForPackage:self.recentPackages[indexPath.row] colorIndex:(NSUInteger)indexPath.row tableView:tableView];
+    return [self packageCellForPackage:self.allPackagesSorted[indexPath.row] colorIndex:(NSUInteger)indexPath.row tableView:tableView];
 }
 
-- (UITableViewCell *)packageCellForPackage:(Package *)pkg tableView:(UITableView *)tableView
+- (UITableViewCell *)packageCellForPackage:(Package *)pkg colorIndex:(NSUInteger)colorIndex tableView:(UITableView *)tableView
 {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kPkgCellID];
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:kPkgCellID];
     }
 
-    UIColor *iconColor = pkg.isInstallDisabled ? UIColor.secondaryLabelColor : self.view.tintColor;
+    UIColor *iconColor = pkg.isInstallDisabled ? UIColor.secondaryLabelColor : CYSpectrumColor(colorIndex);
     UIListContentConfiguration *config = [UIListContentConfiguration subtitleCellConfiguration];
     config.image = CYIconBadgeImage(pkg.symbolName, iconColor, 32.0);
     config.imageProperties.reservedLayoutSize = CGSizeMake(32.0, 32.0);

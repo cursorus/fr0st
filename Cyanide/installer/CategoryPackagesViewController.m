@@ -159,7 +159,7 @@ static NSString * const kCatPkgCellID = @"CatPkgCell";
     }
     Package *pkg = self.filteredPackages[indexPath.row];
 
-    UIColor *mainColor = pkg.isInstallDisabled ? UIColor.secondaryLabelColor : self.view.tintColor;
+    UIColor *mainColor = pkg.isInstallDisabled ? UIColor.secondaryLabelColor : CYSpectrumColor((NSUInteger)indexPath.row);
     UIListContentConfiguration *config = [UIListContentConfiguration subtitleCellConfiguration];
     config.image = CYIconBadgeImage(pkg.symbolName, mainColor, 32.0);
     config.imageProperties.reservedLayoutSize = CGSizeMake(32.0, 32.0);

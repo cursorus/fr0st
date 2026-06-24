@@ -28,6 +28,27 @@ UIImage *CYIconBadgeImage(NSString *sfSymbol, UIColor *color, CGFloat size)
     }];
 }
 
+UIColor *CYSpectrumColor(NSUInteger index)
+{
+    static NSArray<UIColor *> *colors;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        colors = @[
+            UIColor.systemBlueColor,
+            UIColor.systemTealColor,
+            UIColor.systemGreenColor,
+            UIColor.systemOrangeColor,
+            UIColor.systemPinkColor,
+            UIColor.systemPurpleColor,
+            UIColor.systemIndigoColor,
+            UIColor.systemCyanColor,
+            UIColor.systemRedColor,
+            UIColor.systemMintColor,
+        ];
+    });
+    return colors[index % colors.count];
+}
+
 UIView *CYSectionHeaderView(NSString *title)
 {
     UILabel *lbl = [[UILabel alloc] init];

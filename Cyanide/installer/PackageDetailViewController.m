@@ -532,7 +532,7 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     UIImageView *iconView = [[UIImageView alloc] init];
     iconView.translatesAutoresizingMaskIntoConstraints = NO;
     iconView.contentMode = UIViewContentModeScaleAspectFit;
-    iconView.image = CYIconBadgeImage(self.package.symbolName, self.view.tintColor, 60.0);
+    iconView.image = CYIconBadgeImage(self.package.symbolName, CYSpectrumColor(self.package.name.hash), 60.0);
     [header addSubview:iconView];
 
     // Name
@@ -548,8 +548,8 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     UILabel *subLabel = [[UILabel alloc] init];
     subLabel.translatesAutoresizingMaskIntoConstraints = NO;
     subLabel.text = [NSString stringWithFormat:@"%@  ·  Version %@", self.package.category, self.package.version];
-    subLabel.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightRegular];
-    subLabel.textColor = UIColor.secondaryLabelColor;
+    subLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
+    subLabel.textColor = [UIColor.labelColor colorWithAlphaComponent:0.45];
     subLabel.textAlignment = NSTextAlignmentCenter;
     [header addSubview:subLabel];
 
@@ -954,7 +954,7 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
         case PackageDetailSectionAction:       return 1;
         case PackageDetailSectionSettings:     return (NSInteger)self.settingsSummary.count;
         case PackageDetailSectionRepoOptions:  return (NSInteger)self.repoParams.count;
-        case PackageDetailSectionDescription:  return 1;
+        case PackageDetailSectionDescription:  return [self isRepoTweakPackage] ? 2 : 1;
         case PackageDetailSectionCount:        return 0;
     }
     return 0;
@@ -1072,12 +1072,12 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
             ps.lineSpacing = 1.0;
 
             NSDictionary *bulletAttrs = @{
-                NSFontAttributeName: [UIFont systemFontOfSize:13.0],
+                NSFontAttributeName: [UIFont systemFontOfSize:14.0],
                 NSForegroundColorAttributeName: accent,
                 NSParagraphStyleAttributeName: ps,
             };
             NSDictionary *textAttrs = @{
-                NSFontAttributeName: [UIFont systemFontOfSize:13.0],
+                NSFontAttributeName: [UIFont systemFontOfSize:14.0],
                 NSForegroundColorAttributeName: UIColor.labelColor,
                 NSParagraphStyleAttributeName: ps,
             };
@@ -1123,14 +1123,36 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
             NSString *label = row.count > 0 ? row[0] : @"";
             NSString *value = row.count > 1 ? row[1] : @"";
             cell.textLabel.text = label;
+            cell.textLabel.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightMedium];
             cell.detailTextLabel.text = value;
+            cell.detailTextLabel.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightRegular];
             cell.detailTextLabel.textColor = [label isEqualToString:@"State"]
                 ? [self packageStateColor]
-                : UIColor.secondaryLabelColor;
+                : [UIColor.labelColor colorWithAlphaComponent:0.55];
             cell.detailTextLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
             return cell;
         }
         case PackageDetailSectionDescription: {
+            if ([self isRepoTweakPackage] && indexPath.row == 1) {
+                UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+                cell.selectionStyle = UITableViewCellSelectionStyleNone;
+                UILabel *note = [[UILabel alloc] init];
+                note.translatesAutoresizingMaskIntoConstraints = NO;
+                note.numberOfLines = 0;
+                note.text = @"Only install scripts from sources you trust.";
+                note.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightMedium];
+                note.textColor = [UIColor.labelColor colorWithAlphaComponent:0.35];
+                [cell.contentView addSubview:note];
+                UILayoutGuide *nm = cell.contentView.layoutMarginsGuide;
+                [NSLayoutConstraint activateConstraints:@[
+                    [note.topAnchor      constraintEqualToAnchor:nm.topAnchor],
+                    [note.bottomAnchor   constraintEqualToAnchor:nm.bottomAnchor],
+                    [note.leadingAnchor  constraintEqualToAnchor:nm.leadingAnchor],
+                    [note.trailingAnchor constraintEqualToAnchor:nm.trailingAnchor],
+                ]];
+                return cell;
+            }
+
             static NSString *kDescID = @"DescCell";
             UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kDescID];
             if (!cell) {
@@ -1144,12 +1166,12 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
             UILabel *descLabel = [[UILabel alloc] init];
             descLabel.translatesAutoresizingMaskIntoConstraints = NO;
             descLabel.numberOfLines = 0;
-            descLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightRegular];
-            descLabel.textColor = UIColor.secondaryLabelColor;
+            descLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightRegular];
+            descLabel.textColor = [UIColor.labelColor colorWithAlphaComponent:0.75];
 
             NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
-            ps.lineSpacing = 3.0;
-            ps.paragraphSpacing = 10.0;
+            ps.lineSpacing = 4.0;
+            ps.paragraphSpacing = 12.0;
             descLabel.attributedText = [[NSAttributedString alloc]
                 initWithString:self.package.longDescription ?: @""
                     attributes:@{

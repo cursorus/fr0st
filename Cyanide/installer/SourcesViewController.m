@@ -16,6 +16,11 @@
 #import "../tweaks/QuickLoader.h"
 #import "MainTabBarController.h"
 
+@interface Package ()
+@property (nonatomic, readwrite, copy) NSString *symbolName;
+@property (nonatomic, readwrite, copy) NSString *author;
+@end
+
 static NSString * const kSourceCellID      = @"SourceCell";
 static NSString * const kSourcePkgCellID   = @"SourcePkgCell";
 static NSString * const kCategoryCellID    = @"CategoryCell";
@@ -81,6 +86,10 @@ static Package *sources_package_for_tweak(NSString *url, NSDictionary *tweak)
                                                         repoURL:url
                                                     repoTweakID:tweakID
                                                    repoScriptURL:sources_string_or_empty(tweak[@"scriptURL"])];
+    NSString *tweakAuthor = sources_string_or_empty(tweak[@"author"]);
+    if (tweakAuthor.length > 0) pkg.author = tweakAuthor;
+    NSString *symbol = sources_string_or_empty(tweak[@"symbol"]);
+    if (symbol.length > 0) pkg.symbolName = symbol;
     if ([[NSUserDefaults.standardUserDefaults stringForKey:repotweaks_script_defaults_key(url, tweakID)] length] == 0) {
         pkg.installDisabledReason = @"Refresh this source before installing.";
     }
@@ -200,7 +209,7 @@ static UIColor *category_color(NSString *cat)
     NSString *sym = sources_string_or_empty(tweak[@"symbol"]);
     if (sym.length == 0) sym = @"shippingbox.and.arrow.down.fill";
     UIListContentConfiguration *config = [UIListContentConfiguration subtitleCellConfiguration];
-    config.image = CYIconBadgeImage(sym, UIColor.systemOrangeColor, 32.0);
+    config.image = CYIconBadgeImage(sym, CYSpectrumColor((NSUInteger)indexPath.row), 32.0);
     config.imageProperties.reservedLayoutSize = CGSizeMake(32.0, 32.0);
     config.imageProperties.maximumSize = CGSizeMake(32.0, 32.0);
     config.imageToTextPadding = 12.0;
