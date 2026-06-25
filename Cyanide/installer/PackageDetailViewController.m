@@ -140,6 +140,17 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     return self.package.kind == PackageInstallKindRepoTweak;
 }
 
+- (BOOL)repoTweakHasUpdate
+{
+    if (![self isRepoTweakPackage]) return NO;
+    if (self.package.isInstallDisabled) return NO;
+    if (self.package.repoURL.length == 0 || self.package.repoTweakID.length == 0) return NO;
+    NSString *installed = [NSUserDefaults.standardUserDefaults
+        stringForKey:repotweaks_installed_version_key(self.package.repoURL, self.package.repoTweakID)];
+    if (installed.length == 0 || self.package.version.length == 0) return NO;
+    return repotweaks_compare_versions(self.package.version, installed) == NSOrderedDescending;
+}
+
 - (void)reloadRepoOptions
 {
     if (![self isRepoTweakPackage]) {
@@ -238,8 +249,10 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
 {
     PackageQueueIntent intent = [[PackageQueue sharedQueue] intentForPackage:self.package];
     if ([self isRepoTweakPackage]) {
-        if (intent == PackageQueueIntentInstall) return @"Install Pending";
+        BOOL hasUpdate = [self repoTweakHasUpdate];
+        if (intent == PackageQueueIntentInstall) return hasUpdate ? @"Update Pending" : @"Install Pending";
         if (intent == PackageQueueIntentUninstall) return @"Removal Pending";
+        if (hasUpdate) return @"Update Available";
         if (self.package.isInstalled) return @"Installed";
         return @"Available";
     }
@@ -254,6 +267,7 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     PackageQueueIntent intent = [[PackageQueue sharedQueue] intentForPackage:self.package];
     if (intent == PackageQueueIntentInstall) return self.view.tintColor;
     if (intent == PackageQueueIntentUninstall) return UIColor.systemRedColor;
+    if ([self repoTweakHasUpdate]) return UIColor.systemBlueColor;
     if (self.package.isInstalled) return UIColor.systemGreenColor;
     return UIColor.secondaryLabelColor;
 }
@@ -681,6 +695,10 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
         title = @"Change Video";
         tint = self.view.tintColor;
         style = UIBarButtonItemStyleDone;
+    } else if ([self repoTweakHasUpdate]) {
+        title = @"Update";
+        tint = self.view.tintColor;
+        style = UIBarButtonItemStyleDone;
     } else if (installed && [self isRepoTweakPackage]) {
         title = @"Remove";
         tint = UIColor.systemRedColor;
@@ -761,6 +779,11 @@ typedef NS_ENUM(NSInteger, PackageDetailSection) {
     // them when intent == None (the bar item carries a UIMenu instead of a
     // selector target).
     if ([self isManualPackage]) {
+        return;
+    } else if ([self repoTweakHasUpdate]) {
+        if ([self presentQueueConflictIfNeededForIntent:PackageQueueIntentInstall]) return;
+        log_user("[INSTALLER] Pending update: %s\n", self.package.name.UTF8String);
+        [[PackageQueue sharedQueue] queueIntent:PackageQueueIntentInstall forPackage:self.package];
         return;
     } else if (self.package.isInstalled) {
         if ([self presentQueueConflictIfNeededForIntent:PackageQueueIntentUninstall]) return;

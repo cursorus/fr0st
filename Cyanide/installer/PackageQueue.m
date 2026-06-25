@@ -6,6 +6,8 @@
 #import "PackageQueue.h"
 #import "PackageCatalog.h"
 #import "../SettingsViewController.h"
+#import "../tweaks/QuickLoader.h"
+#import "../tweaks/RepoTweaks.h"
 
 NSString * const PackageQueueDidChangeNotification = @"PackageQueueDidChangeNotification";
 
@@ -42,6 +44,48 @@ static BOOL PackageCanQueueInstall(Package *package)
     return PackageMissingThemeReason(package).length == 0;
 }
 
+static BOOL PackageEnabledKeyIsRepoDriven(NSString *enabledKey)
+{
+    if (enabledKey.length == 0) return NO;
+    if ([enabledKey isEqualToString:kSettingsQuickLoaderEnabled]) {
+        return quickloader_is_driven_by_repo_tweak();
+    }
+
+    NSString *repoTweakID = nil;
+    if ([enabledKey isEqualToString:kSettingsSBCEnabled]) {
+        repoTweakID = @"lightsaber.sbcustomizer";
+    } else if ([enabledKey isEqualToString:kSettingsStatBarEnabled]) {
+        repoTweakID = @"lightsaber.statbar";
+    } else if ([enabledKey isEqualToString:kSettingsPowercuffEnabled]) {
+        repoTweakID = @"lightsaber.powercuff";
+    }
+    if (repoTweakID.length == 0) return NO;
+
+    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
+    id rawURLs = [d objectForKey:@"RepoTweaksURLs"];
+    if (![rawURLs isKindOfClass:NSArray.class]) return NO;
+    for (id value in (NSArray *)rawURLs) {
+        if (![value isKindOfClass:NSString.class]) continue;
+        if ([d stringForKey:repotweaks_installed_version_key((NSString *)value, repoTweakID)].length > 0) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL PackageShouldAutoQueueForApply(Package *package)
+{
+    // Repo tweak updates are intentionally user-driven: refresh should only
+    // show update badges. The user must tap Update/Install before anything
+    // enters the pending queue.
+    if (package.kind == PackageInstallKindRepoTweak) return NO;
+    if (package.kind == PackageInstallKindToggle &&
+        PackageEnabledKeyIsRepoDriven(package.enabledKey)) {
+        return NO;
+    }
+    return package.isQueuedForApply;
+}
+
 @implementation PackageQueue
 
 + (instancetype)sharedQueue
@@ -75,7 +119,7 @@ static BOOL PackageCanQueueInstall(Package *package)
     for (Package *p in [PackageCatalog allPackages]) {
         if (p.isInstallDisabled) continue;
         if (!PackageCanQueueInstall(p)) continue;
-        if (!p.isQueuedForApply) continue;
+        if (!PackageShouldAutoQueueForApply(p)) continue;
         if ([self packageInArray:out matching:p]) continue;
         if ([self packageInArray:self.uninstalls matching:p]) continue;
         [out addObject:p];
@@ -121,7 +165,7 @@ static BOOL PackageCanQueueInstall(Package *package)
     if ([self packageInArray:self.installs matching:package])   return PackageQueueIntentInstall;
     if ([self packageInArray:self.uninstalls matching:package]) return PackageQueueIntentUninstall;
     if (package.isInstallDisabled) return PackageQueueIntentNone;
-    if (package.isQueuedForApply) return PackageQueueIntentInstall;
+    if (PackageShouldAutoQueueForApply(package)) return PackageQueueIntentInstall;
     return PackageQueueIntentNone;
 }
 
@@ -189,6 +233,17 @@ static BOOL PackageCanQueueInstall(Package *package)
     if (intent == PackageQueueIntentNone) return YES;
 
     if (intent == PackageQueueIntentInstall) {
+        // Compatibility/availability gates only block new installs or updates.
+        // If the user already has a now-unsupported repo tweak installed,
+        // keep PackageQueueIntentUninstall available so they can remove it.
+        if (package.isInstallDisabled) {
+            if (reason) {
+                *reason = package.installDisabledReason.length
+                    ? package.installDisabledReason
+                    : @"This package is not available on this iOS version.";
+            }
+            return NO;
+        }
         NSString *themeReason = PackageMissingThemeReason(package);
         if (themeReason.length > 0) {
             if (reason) *reason = themeReason;
@@ -259,11 +314,18 @@ static BOOL PackageCanQueueInstall(Package *package)
 
 - (void)removePackage:(Package *)package
 {
+    BOOL hadExplicitIntent = NO;
     Package *match = [self packageInArray:self.installs matching:package];
-    if (match) [self.installs removeObject:match];
+    if (match) {
+        hadExplicitIntent = YES;
+        [self.installs removeObject:match];
+    }
     match = [self packageInArray:self.uninstalls matching:package];
-    if (match) [self.uninstalls removeObject:match];
-    if (package.isQueuedForApply) {
+    if (match) {
+        hadExplicitIntent = YES;
+        [self.uninstalls removeObject:match];
+    }
+    if (!hadExplicitIntent && PackageShouldAutoQueueForApply(package)) {
         [package applyCommittedState:NO];
     }
     [self notifyChange];
@@ -277,7 +339,7 @@ static BOOL PackageCanQueueInstall(Package *package)
     // packages via applyCommittedState:NO before clear() got a chance to act).
     NSArray<Package *> *queuedForApply = self.queuedInstalls;
     for (Package *pkg in queuedForApply) {
-        if (![self packageInArray:self.installs matching:pkg] && pkg.isQueuedForApply) {
+        if (![self packageInArray:self.installs matching:pkg] && PackageShouldAutoQueueForApply(pkg)) {
             [pkg applyCommittedState:NO];
         }
     }

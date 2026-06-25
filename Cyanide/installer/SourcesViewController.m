@@ -90,7 +90,11 @@ static Package *sources_package_for_tweak(NSString *url, NSDictionary *tweak)
     if (tweakAuthor.length > 0) pkg.author = tweakAuthor;
     NSString *symbol = sources_string_or_empty(tweak[@"symbol"]);
     if (symbol.length > 0) pkg.symbolName = symbol;
-    if ([[NSUserDefaults.standardUserDefaults stringForKey:repotweaks_script_defaults_key(url, tweakID)] length] == 0) {
+    NSString *unsupportedReason = repotweaks_unsupported_reason(tweak);
+    if (unsupportedReason.length > 0) {
+        pkg.installDisabledReason = unsupportedReason;
+        pkg.unstableWarning = unsupportedReason;
+    } else if ([[NSUserDefaults.standardUserDefaults stringForKey:repotweaks_script_defaults_key(url, tweakID)] length] == 0) {
         pkg.installDisabledReason = @"Refresh this source before installing.";
     }
     return pkg;
@@ -98,13 +102,14 @@ static Package *sources_package_for_tweak(NSString *url, NSDictionary *tweak)
 
 static BOOL sources_tweak_has_update(NSString *url, NSDictionary *tweak)
 {
+    if (repotweaks_unsupported_reason(tweak).length > 0) return NO;
     NSString *tweakID = sources_string_or_empty(tweak[@"id"]);
     if (tweakID.length == 0) return NO;
     NSString *installed = [NSUserDefaults.standardUserDefaults stringForKey:repotweaks_installed_version_key(url, tweakID)];
     if (!installed.length) return NO;
     NSString *repoVersion = sources_string_or_empty(tweak[@"version"]);
     if (!repoVersion.length) return NO;
-    return [repoVersion compare:installed options:NSNumericSearch] == NSOrderedDescending;
+    return repotweaks_compare_versions(repoVersion, installed) == NSOrderedDescending;
 }
 
 static NSUInteger sources_update_count_for_url(NSString *url)
@@ -139,10 +144,9 @@ static NSString *category_icon(NSString *cat)
     dispatch_once(&once, ^{
         map = @{
             @"Status Bar":          @"chart.bar.fill",
-            @"Home Screen Layout":  @"square.grid.3x3.fill",
-            @"Performance":         @"bolt.slash.fill",
-            @"SpringBoard Tweaks":  @"sparkle",
-            @"System Updates":      @"icloud.slash.fill",
+            @"Home Screen":         @"square.grid.3x3.fill",
+            @"Theming":             @"paintbrush.fill",
+            @"SpringBoard":         @"sparkle",
             @"System":              @"gear",
             @"Experimental":        @"flask.fill",
             @"In Development":      @"hammer.fill",
@@ -159,10 +163,9 @@ static UIColor *category_color(NSString *cat)
     dispatch_once(&once, ^{
         map = @{
             @"Status Bar":          UIColor.systemTealColor,
-            @"Home Screen Layout":  UIColor.systemBlueColor,
-            @"Performance":         UIColor.systemOrangeColor,
-            @"SpringBoard Tweaks":  UIColor.systemCyanColor,
-            @"System Updates":      UIColor.systemIndigoColor,
+            @"Home Screen":         UIColor.systemBlueColor,
+            @"Theming":             UIColor.systemPinkColor,
+            @"SpringBoard":         UIColor.systemCyanColor,
             @"System":              UIColor.systemGrayColor,
             @"Experimental":        UIColor.systemRedColor,
             @"In Development":      UIColor.systemPurpleColor,
@@ -217,8 +220,33 @@ static UIColor *category_color(NSString *cat)
     config.textProperties.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
     NSString *version = sources_string_or_empty(tweak[@"version"]);
     NSString *desc = sources_string_or_empty(tweak[@"description"]);
-    config.secondaryText = version.length ? [NSString stringWithFormat:@"v%@ · %@", version, desc] : desc;
-    config.secondaryTextProperties.color = [UIColor.labelColor colorWithAlphaComponent:0.55];
+    NSString *unsupportedReason = repotweaks_unsupported_reason(tweak);
+    NSString *compatibility = unsupportedReason.length ? unsupportedReason : repotweaks_compatibility_note(tweak);
+    Package *pkg = sources_package_for_tweak(self.repoURL, tweak);
+    BOOL installed = pkg.isInstalled;
+    BOOL disabledForInstall = unsupportedReason.length > 0 && !installed;
+    if (disabledForInstall) {
+        config.image = CYIconBadgeImage(sym, UIColor.secondaryLabelColor, 32.0);
+        config.textProperties.color = UIColor.secondaryLabelColor;
+    }
+    if (installed && unsupportedReason.length && desc.length) {
+        config.secondaryText = [NSString stringWithFormat:@"Installed, unsupported here · %@ · %@", unsupportedReason, desc];
+    } else if (installed && unsupportedReason.length) {
+        config.secondaryText = [NSString stringWithFormat:@"Installed, unsupported here · %@", unsupportedReason];
+    } else if (version.length && compatibility.length && desc.length) {
+        config.secondaryText = [NSString stringWithFormat:@"v%@ · %@ · %@", version, compatibility, desc];
+    } else if (version.length && compatibility.length) {
+        config.secondaryText = [NSString stringWithFormat:@"v%@ · %@", version, compatibility];
+    } else if (version.length) {
+        config.secondaryText = [NSString stringWithFormat:@"v%@ · %@", version, desc];
+    } else if (compatibility.length && desc.length) {
+        config.secondaryText = [NSString stringWithFormat:@"%@ · %@", compatibility, desc];
+    } else {
+        config.secondaryText = desc;
+    }
+    config.secondaryTextProperties.color = unsupportedReason.length
+        ? UIColor.systemOrangeColor
+        : [UIColor.labelColor colorWithAlphaComponent:0.55];
     config.secondaryTextProperties.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightRegular];
     config.secondaryTextProperties.numberOfLines = 2;
     config.textToSecondaryTextVerticalPadding = 2.0;
@@ -227,7 +255,39 @@ static UIColor *category_color(NSString *cat)
     config.directionalLayoutMargins = m;
     cell.contentConfiguration = config;
 
-    if (sources_tweak_has_update(self.repoURL, tweak)) {
+    if (installed && unsupportedReason.length > 0) {
+        UILabel *pill = [[UILabel alloc] init];
+        pill.text = @"INSTALLED";
+        pill.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightHeavy];
+        pill.textColor = UIColor.systemGreenColor;
+        pill.backgroundColor = [UIColor.systemGreenColor colorWithAlphaComponent:0.15];
+        pill.textAlignment = NSTextAlignmentCenter;
+        [pill sizeToFit];
+        CGRect f = pill.frame;
+        f.size.width += 14.0;
+        f.size.height = 22.0;
+        pill.frame = f;
+        pill.layer.cornerRadius = f.size.height / 2.0;
+        pill.layer.cornerCurve = kCACornerCurveContinuous;
+        pill.layer.masksToBounds = YES;
+        cell.accessoryView = pill;
+    } else if (unsupportedReason.length > 0) {
+        UILabel *pill = [[UILabel alloc] init];
+        pill.text = @"UNSUPPORTED";
+        pill.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightHeavy];
+        pill.textColor = UIColor.systemOrangeColor;
+        pill.backgroundColor = [UIColor.systemOrangeColor colorWithAlphaComponent:0.15];
+        pill.textAlignment = NSTextAlignmentCenter;
+        [pill sizeToFit];
+        CGRect f = pill.frame;
+        f.size.width += 14.0;
+        f.size.height = 22.0;
+        pill.frame = f;
+        pill.layer.cornerRadius = f.size.height / 2.0;
+        pill.layer.cornerCurve = kCACornerCurveContinuous;
+        pill.layer.masksToBounds = YES;
+        cell.accessoryView = pill;
+    } else if (sources_tweak_has_update(self.repoURL, tweak)) {
         UILabel *pill = [[UILabel alloc] init];
         pill.text = @"UPDATE";
         pill.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightHeavy];
@@ -255,8 +315,7 @@ static UIColor *category_color(NSString *cat)
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSArray *tweaks = sources_tweaks_for_url(self.repoURL);
     if (indexPath.row >= (NSInteger)tweaks.count) return;
-    Package *pkg = sources_package_for_tweak(self.repoURL, tweaks[indexPath.row]);
-    PackageDetailViewController *detail = [[PackageDetailViewController alloc] initWithPackage:pkg];
+    PackageDetailViewController *detail = [[PackageDetailViewController alloc] initWithPackage:sources_package_for_tweak(self.repoURL, tweaks[indexPath.row])];
     [self.navigationController pushViewController:detail animated:YES];
 }
 
@@ -366,7 +425,6 @@ static UIColor *category_color(NSString *cat)
     NSMutableDictionary<NSString *, NSArray<Package *> *> *filtered = [NSMutableDictionary dictionary];
 
     for (NSString *cat in [PackageCatalog categoriesInOrder]) {
-        if ([cat isEqualToString:@"Beta"]) continue;
         NSArray<Package *> *pkgs = all[cat];
         if (pkgs.count > 0) {
             [cats addObject:cat];

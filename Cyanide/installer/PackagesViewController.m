@@ -15,6 +15,31 @@
 static NSString * const kPkgCellID    = @"PkgCell";
 static NSString * const kSearchCellID = @"SearchPkgCell";
 
+static NSString *relative_time(NSTimeInterval timestamp)
+{
+    if (timestamp <= 0) return nil;
+    NSTimeInterval diff = [[NSDate date] timeIntervalSince1970] - timestamp;
+    if (diff < 60)          return @"Just now";
+    if (diff < 3600)        return [NSString stringWithFormat:@"%ldm ago", (long)(diff / 60)];
+    if (diff < 86400)       return [NSString stringWithFormat:@"%ldh ago", (long)(diff / 3600)];
+    if (diff < 86400 * 2)   return @"Yesterday";
+    if (diff < 86400 * 7)   return [NSString stringWithFormat:@"%ldd ago", (long)(diff / 86400)];
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"MMM d";
+    return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:timestamp]];
+}
+
+static BOOL package_has_repo_update(Package *pkg)
+{
+    if (pkg.kind != PackageInstallKindRepoTweak) return NO;
+    if (pkg.isInstallDisabled) return NO;
+    if (pkg.repoURL.length == 0 || pkg.repoTweakID.length == 0) return NO;
+    NSString *installed = [[NSUserDefaults standardUserDefaults]
+        stringForKey:repotweaks_installed_version_key(pkg.repoURL, pkg.repoTweakID)];
+    if (installed.length == 0 || pkg.version.length == 0) return NO;
+    return repotweaks_compare_versions(pkg.version, installed) == NSOrderedDescending;
+}
+
 typedef NS_ENUM(NSInteger, PackagesSection) {
     PackagesSectionNew = 0,
     PackagesSectionAll,
@@ -97,21 +122,19 @@ typedef NS_ENUM(NSInteger, PackagesSection) {
     NSMutableArray<Package *> *recentPkgs = [NSMutableArray array];
     NSMutableArray<Package *> *filtered = [NSMutableArray array];
     for (Package *p in all) {
-        if ([p.category isEqualToString:@"Beta"]) continue;
         [filtered addObject:p];
-        if (p.kind == PackageInstallKindRepoTweak) {
-            if (!p.isInstalled) {
-                [recentPkgs addObject:p];
-            } else if (p.repoURL.length > 0 && p.repoTweakID.length > 0) {
-                NSString *installed = [[NSUserDefaults standardUserDefaults]
-                    stringForKey:repotweaks_installed_version_key(p.repoURL, p.repoTweakID)];
-                if (installed.length > 0 && p.version.length > 0 &&
-                    [p.version compare:installed options:NSNumericSearch] == NSOrderedDescending) {
-                    [recentPkgs addObject:p];
-                }
-            }
+        if (p.kind == PackageInstallKindRepoTweak && p.repoURL.length > 0 && p.repoTweakID.length > 0) {
+            NSTimeInterval seen = repotweaks_seen_timestamp(p.repoURL, p.repoTweakID);
+            if (seen > 0) [recentPkgs addObject:p];
         }
     }
+
+    [recentPkgs sortUsingComparator:^NSComparisonResult(Package *a, Package *b) {
+        NSTimeInterval ta = repotweaks_seen_timestamp(a.repoURL, a.repoTweakID);
+        NSTimeInterval tb = repotweaks_seen_timestamp(b.repoURL, b.repoTweakID);
+        if (ta != tb) return ta > tb ? NSOrderedAscending : NSOrderedDescending;
+        return NSOrderedSame;
+    }];
 
     self.recentPackages = recentPkgs;
     self.allPackagesSorted = filtered;
@@ -198,7 +221,10 @@ typedef NS_ENUM(NSInteger, PackagesSection) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:kPkgCellID];
     }
 
-    UIColor *iconColor = pkg.isInstallDisabled ? UIColor.secondaryLabelColor : CYSpectrumColor(colorIndex);
+    BOOL installed = pkg.isInstalled;
+    BOOL unsupported = pkg.isInstallDisabled && pkg.installDisabledReason.length > 0;
+    BOOL disabledForInstall = pkg.isInstallDisabled && !installed;
+    UIColor *iconColor = disabledForInstall ? UIColor.secondaryLabelColor : CYSpectrumColor(colorIndex);
     UIListContentConfiguration *config = [UIListContentConfiguration subtitleCellConfiguration];
     config.image = CYIconBadgeImage(pkg.symbolName, iconColor, 32.0);
     config.imageProperties.reservedLayoutSize = CGSizeMake(32.0, 32.0);
@@ -206,18 +232,97 @@ typedef NS_ENUM(NSInteger, PackagesSection) {
     config.imageToTextPadding = 12.0;
     config.text = pkg.name;
     config.textProperties.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
-    if (pkg.isInstallDisabled) config.textProperties.color = UIColor.secondaryLabelColor;
-    config.secondaryText = pkg.shortDescription;
+    if (disabledForInstall) config.textProperties.color = UIColor.secondaryLabelColor;
+
+    BOOL hasUpdate = package_has_repo_update(pkg);
+    NSTimeInterval seen = (pkg.kind == PackageInstallKindRepoTweak && pkg.repoURL.length > 0)
+        ? repotweaks_seen_timestamp(pkg.repoURL, pkg.repoTweakID) : 0;
+    NSString *time = relative_time(seen);
+    if (unsupported && installed && pkg.shortDescription.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"Installed, unsupported here · %@ · %@",
+                                pkg.installDisabledReason,
+                                pkg.shortDescription];
+    } else if (unsupported && installed) {
+        config.secondaryText = [NSString stringWithFormat:@"Installed, unsupported here · %@",
+                                pkg.installDisabledReason];
+    } else if (unsupported && pkg.shortDescription.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"%@ · %@", pkg.installDisabledReason, pkg.shortDescription];
+    } else if (unsupported) {
+        config.secondaryText = pkg.installDisabledReason;
+    } else if (hasUpdate && time && pkg.shortDescription.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"Update available · %@ · %@", time, pkg.shortDescription];
+    } else if (hasUpdate && pkg.shortDescription.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"Update available · %@", pkg.shortDescription];
+    } else if (hasUpdate) {
+        config.secondaryText = @"Update available";
+    } else if (time && pkg.shortDescription.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"%@ · %@", time, pkg.shortDescription];
+    } else {
+        config.secondaryText = pkg.shortDescription;
+    }
     config.secondaryTextProperties.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightRegular];
-    config.secondaryTextProperties.color = [UIColor.labelColor colorWithAlphaComponent:0.55];
+    config.secondaryTextProperties.color = unsupported
+        ? UIColor.systemOrangeColor
+        : (hasUpdate ? UIColor.systemBlueColor : [UIColor.labelColor colorWithAlphaComponent:0.55]);
     config.secondaryTextProperties.numberOfLines = 3;
     config.textToSecondaryTextVerticalPadding = 2.0;
     NSDirectionalEdgeInsets m = config.directionalLayoutMargins;
     m.top = 10.0; m.bottom = 10.0;
     config.directionalLayoutMargins = m;
     cell.contentConfiguration = config;
-    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    cell.accessoryView = nil;
+
+    if (unsupported && installed) {
+        UILabel *pill = [[UILabel alloc] init];
+        pill.text = @"INSTALLED";
+        pill.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightHeavy];
+        pill.textColor = UIColor.systemGreenColor;
+        pill.backgroundColor = [UIColor.systemGreenColor colorWithAlphaComponent:0.15];
+        pill.textAlignment = NSTextAlignmentCenter;
+        [pill sizeToFit];
+        CGRect f = pill.frame;
+        f.size.width += 14.0;
+        f.size.height = 22.0;
+        pill.frame = f;
+        pill.layer.cornerRadius = f.size.height / 2.0;
+        pill.layer.cornerCurve = kCACornerCurveContinuous;
+        pill.layer.masksToBounds = YES;
+        cell.accessoryView = pill;
+    } else if (unsupported) {
+        UILabel *pill = [[UILabel alloc] init];
+        pill.text = @"UNSUPPORTED";
+        pill.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightHeavy];
+        pill.textColor = UIColor.systemOrangeColor;
+        pill.backgroundColor = [UIColor.systemOrangeColor colorWithAlphaComponent:0.15];
+        pill.textAlignment = NSTextAlignmentCenter;
+        [pill sizeToFit];
+        CGRect f = pill.frame;
+        f.size.width += 14.0;
+        f.size.height = 22.0;
+        pill.frame = f;
+        pill.layer.cornerRadius = f.size.height / 2.0;
+        pill.layer.cornerCurve = kCACornerCurveContinuous;
+        pill.layer.masksToBounds = YES;
+        cell.accessoryView = pill;
+    } else if (hasUpdate) {
+        UILabel *pill = [[UILabel alloc] init];
+        pill.text = @"UPDATE";
+        pill.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightHeavy];
+        pill.textColor = UIColor.systemBlueColor;
+        pill.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.15];
+        pill.textAlignment = NSTextAlignmentCenter;
+        [pill sizeToFit];
+        CGRect f = pill.frame;
+        f.size.width += 14.0;
+        f.size.height = 22.0;
+        pill.frame = f;
+        pill.layer.cornerRadius = f.size.height / 2.0;
+        pill.layer.cornerCurve = kCACornerCurveContinuous;
+        pill.layer.masksToBounds = YES;
+        cell.accessoryView = pill;
+    } else {
+        cell.accessoryView = nil;
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
     return cell;
 }
 

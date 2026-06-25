@@ -256,7 +256,7 @@ static BOOL QueuePackageIsHideHomeBar(Package *pkg)
     NSMutableArray<Package *> *out = [NSMutableArray array];
     for (Package *p in [PackageCatalog allPackages]) {
         if (!p.isInstalled) continue;
-        if ([q intentForPackage:p] == PackageQueueIntentUninstall) continue;
+        if ([q intentForPackage:p] != PackageQueueIntentNone) continue;
         [out addObject:p];
     }
 
@@ -394,7 +394,8 @@ static BOOL QueuePackageIsHideHomeBar(Package *pkg)
     }
 
     Package *pkg = packages[indexPath.row];
-    BOOL isQuickLoader = [pkg.enabledKey isEqualToString:kSettingsQuickLoaderEnabled];
+    BOOL isQuickLoader = (pkg.kind != PackageInstallKindRepoTweak &&
+                          [pkg.enabledKey isEqualToString:kSettingsQuickLoaderEnabled]);
     if (isQuickLoader) {
         NSString *scriptName = [[NSUserDefaults standardUserDefaults] stringForKey:@"QuickLoaderSourceScriptName"];
         cell.textLabel.text = scriptName.length ? [NSString stringWithFormat:@"QuickLoader: %@", scriptName] : pkg.name;

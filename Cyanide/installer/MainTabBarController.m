@@ -54,6 +54,7 @@ static NSString * const kSourcesLastRefreshKey = @"RepoTweaksLastRefreshTimestam
                                                  name:RepoTweaksDidRefreshNotification
                                                object:nil];
 
+    [self updateSourcesBadge];
     [self refreshSourcesIfNeeded];
     self.sourcesRefreshTimer = [NSTimer scheduledTimerWithTimeInterval:kSourcesRefreshInterval
                                                                target:self
@@ -162,6 +163,7 @@ static NSString * const kSourcesLastRefreshKey = @"RepoTweaksLastRefreshTimestam
     [super viewWillAppear:animated];
     [self.popupBar refreshFromQueueAnimated:NO];
     [self refreshChildInsetsAnimated:NO];
+    [self updateSourcesBadge];
 }
 
 - (void)setViewControllers:(NSArray<UIViewController *> *)viewControllers animated:(BOOL)animated
@@ -175,6 +177,9 @@ static NSString * const kSourcesLastRefreshKey = @"RepoTweaksLastRefreshTimestam
 - (void)queueDidChange:(NSNotification *)note
 {
     [self refreshChildInsetsAnimated:YES];
+    if ([note.name isEqualToString:kSettingsActionsDidCompleteNotification]) {
+        [self updateSourcesBadge];
+    }
 }
 
 - (void)refreshChildInsetsAnimated:(BOOL)animated

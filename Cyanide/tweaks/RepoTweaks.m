@@ -329,6 +329,14 @@ static NSDictionary *repotweaks_sanitized_tweak(id raw, NSString **errorMessage)
     if (symbol.length > 0) out[@"symbol"] = symbol;
     NSString *author = repotweaks_string_or_empty(dict[@"author"]);
     if (author.length > 0) out[@"author"] = author;
+    NSString *minIOS = repotweaks_string_or_empty(dict[@"minIOS"]);
+    if (minIOS.length > 0) out[@"minIOS"] = minIOS;
+    NSString *maxIOS = repotweaks_string_or_empty(dict[@"maxIOS"]);
+    if (maxIOS.length > 0) out[@"maxIOS"] = maxIOS;
+    NSString *compatibilityNote = repotweaks_string_or_empty(dict[@"compatibilityNote"]);
+    if (compatibilityNote.length > 0) out[@"compatibilityNote"] = compatibilityNote;
+    NSString *unsupportedMessage = repotweaks_string_or_empty(dict[@"unsupportedMessage"]);
+    if (unsupportedMessage.length > 0) out[@"unsupportedMessage"] = unsupportedMessage;
     return out;
 }
 
@@ -792,6 +800,31 @@ void repotweaks_refresh_repo(NSString *repoURL, void (^completion)(BOOL success,
 
         NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
         NSMutableDictionary *caches = [repotweaks_saved_caches(d) mutableCopy];
+        NSDictionary *oldRepo = [caches[repoURL] isKindOfClass:NSDictionary.class] ? caches[repoURL] : nil;
+        NSArray *oldTweaks = [oldRepo[@"tweaks"] isKindOfClass:NSArray.class] ? oldRepo[@"tweaks"] : @[];
+        NSMutableDictionary<NSString *, NSString *> *oldVersions = [NSMutableDictionary dictionary];
+        for (id t in oldTweaks) {
+            if ([t isKindOfClass:NSDictionary.class]) {
+                NSString *tid = repotweaks_string_or_empty(t[@"id"]);
+                NSString *tv = repotweaks_string_or_empty(t[@"version"]);
+                if (tid.length > 0) oldVersions[tid] = tv;
+            }
+        }
+
+        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        for (NSDictionary *tweak in sanitized[@"tweaks"]) {
+            NSString *tid = repotweaks_string_or_empty(tweak[@"id"]);
+            NSString *tv = repotweaks_string_or_empty(tweak[@"version"]);
+            if (tid.length == 0) continue;
+            NSString *seenKey = [NSString stringWithFormat:@"RepoTweakSeen_%@", repotweaks_storage_key(repoURL, tid)];
+            NSString *oldV = oldVersions[tid];
+            if (!oldV || (tv.length > 0 && ![tv isEqualToString:oldV])) {
+                [d setDouble:now forKey:seenKey];
+            } else if ([d doubleForKey:seenKey] == 0) {
+                [d setDouble:now forKey:seenKey];
+            }
+        }
+
         caches[repoURL] = sanitized;
         [d setObject:caches forKey:@"RepoTweaksCaches"];
 
@@ -930,11 +963,89 @@ NSString *repotweaks_installed_version_key(NSString *repoURL, NSString *tweakId)
     return [NSString stringWithFormat:@"RepoTweakInstalledVersion_%@", repotweaks_storage_key(repoURL, tweakId)];
 }
 
-static NSComparisonResult repotweaks_compare_versions(NSString *a, NSString *b) {
+NSComparisonResult repotweaks_compare_versions(NSString *a, NSString *b) {
     if (!a.length && !b.length) return NSOrderedSame;
     if (!a.length) return NSOrderedAscending;
     if (!b.length) return NSOrderedDescending;
     return [a compare:b options:NSNumericSearch];
+}
+
+static NSString *repotweaks_current_ios_version_string(void)
+{
+    NSOperatingSystemVersion v = [[NSProcessInfo processInfo] operatingSystemVersion];
+    return [NSString stringWithFormat:@"%ld.%ld.%ld",
+            (long)v.majorVersion,
+            (long)v.minorVersion,
+            (long)v.patchVersion];
+}
+
+static NSInteger repotweaks_version_major(NSString *version)
+{
+    NSString *safe = repotweaks_string_or_empty(version);
+    if (safe.length == 0) return NSNotFound;
+    return (NSInteger)[safe componentsSeparatedByString:@"."].firstObject.integerValue;
+}
+
+static BOOL repotweaks_bound_uses_major_wildcard(NSString *bound)
+{
+    NSString *safe = repotweaks_string_or_empty(bound).lowercaseString;
+    return [safe hasSuffix:@".x"] || [safe hasSuffix:@".*"];
+}
+
+static NSComparisonResult repotweaks_compare_ios_to_bound(NSString *current, NSString *bound)
+{
+    if (repotweaks_bound_uses_major_wildcard(bound)) {
+        NSInteger currentMajor = repotweaks_version_major(current);
+        NSInteger boundMajor = repotweaks_version_major(bound);
+        if (currentMajor == NSNotFound || boundMajor == NSNotFound) return NSOrderedSame;
+        if (currentMajor < boundMajor) return NSOrderedAscending;
+        if (currentMajor > boundMajor) return NSOrderedDescending;
+        return NSOrderedSame;
+    }
+    return [repotweaks_string_or_empty(current) compare:repotweaks_string_or_empty(bound)
+                                                options:NSNumericSearch];
+}
+
+NSString *repotweaks_compatibility_note(NSDictionary *tweak)
+{
+    if (![tweak isKindOfClass:NSDictionary.class]) return nil;
+    NSString *note = repotweaks_string_or_empty(tweak[@"compatibilityNote"]);
+    if (note.length > 0) return note;
+
+    NSString *minIOS = repotweaks_string_or_empty(tweak[@"minIOS"]);
+    NSString *maxIOS = repotweaks_string_or_empty(tweak[@"maxIOS"]);
+    if (minIOS.length > 0 && maxIOS.length > 0) {
+        return [NSString stringWithFormat:@"Tested on iOS %@–%@", minIOS, maxIOS];
+    }
+    if (maxIOS.length > 0) return [NSString stringWithFormat:@"Tested on iOS %@ and below", maxIOS];
+    if (minIOS.length > 0) return [NSString stringWithFormat:@"Requires iOS %@ or newer", minIOS];
+    return nil;
+}
+
+NSString *repotweaks_unsupported_reason(NSDictionary *tweak)
+{
+    if (![tweak isKindOfClass:NSDictionary.class]) return nil;
+    NSString *current = repotweaks_current_ios_version_string();
+    NSString *minIOS = repotweaks_string_or_empty(tweak[@"minIOS"]);
+    NSString *maxIOS = repotweaks_string_or_empty(tweak[@"maxIOS"]);
+    BOOL tooOld = minIOS.length > 0 &&
+        repotweaks_compare_ios_to_bound(current, minIOS) == NSOrderedAscending;
+    BOOL tooNew = maxIOS.length > 0 &&
+        repotweaks_compare_ios_to_bound(current, maxIOS) == NSOrderedDescending;
+    if (!tooOld && !tooNew) return nil;
+
+    NSString *message = repotweaks_string_or_empty(tweak[@"unsupportedMessage"]);
+    if (message.length > 0) return message;
+    NSString *note = repotweaks_compatibility_note(tweak);
+    if (note.length > 0) return note;
+    if (tooNew && maxIOS.length > 0) return [NSString stringWithFormat:@"Only tested on iOS %@ and below.", maxIOS];
+    if (tooOld && minIOS.length > 0) return [NSString stringWithFormat:@"Requires iOS %@ or newer.", minIOS];
+    return @"This repo tweak is not supported on this iOS version.";
+}
+
+NSTimeInterval repotweaks_seen_timestamp(NSString *repoURL, NSString *tweakId) {
+    NSString *key = [NSString stringWithFormat:@"RepoTweakSeen_%@", repotweaks_storage_key(repoURL, tweakId)];
+    return [[NSUserDefaults standardUserDefaults] doubleForKey:key];
 }
 
 NSUInteger repotweaks_available_update_count(void) {
@@ -951,6 +1062,7 @@ NSUInteger repotweaks_available_update_count(void) {
         for (id tweakRaw in (NSArray *)tweaksRaw) {
             if (![tweakRaw isKindOfClass:NSDictionary.class]) continue;
             NSDictionary *tweak = (NSDictionary *)tweakRaw;
+            if (repotweaks_unsupported_reason(tweak).length > 0) continue;
             NSString *tweakID = repotweaks_string_or_empty(tweak[@"id"]);
             if (tweakID.length == 0) continue;
 

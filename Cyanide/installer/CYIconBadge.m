@@ -51,18 +51,21 @@ UIColor *CYSpectrumColor(NSUInteger index)
 
 UIView *CYSectionHeaderView(NSString *title)
 {
+    UIView *container = [[UIView alloc] init];
+
     UILabel *lbl = [[UILabel alloc] init];
+    lbl.translatesAutoresizingMaskIntoConstraints = NO;
     lbl.text = title;
     lbl.font = [UIFont systemFontOfSize:20.0 weight:UIFontWeightBold];
     lbl.textColor = UIColor.labelColor;
-
-    CGSize size = [lbl sizeThatFits:CGSizeMake(UIScreen.mainScreen.bounds.size.width - 40.0, CGFLOAT_MAX)];
-    CGFloat height = 16.0 + ceil(size.height) + 6.0;
-
-    UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, UIScreen.mainScreen.bounds.size.width, height)];
-    lbl.frame = CGRectMake(20.0, 16.0, container.bounds.size.width - 40.0, ceil(size.height));
-    lbl.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     [container addSubview:lbl];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [lbl.leadingAnchor  constraintEqualToAnchor:container.leadingAnchor constant:20.0],
+        [lbl.trailingAnchor constraintLessThanOrEqualToAnchor:container.trailingAnchor constant:-20.0],
+        [lbl.topAnchor      constraintEqualToAnchor:container.topAnchor constant:16.0],
+        [lbl.bottomAnchor   constraintEqualToAnchor:container.bottomAnchor constant:-6.0],
+    ]];
 
     return container;
 }

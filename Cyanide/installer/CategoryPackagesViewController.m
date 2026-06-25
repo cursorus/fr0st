@@ -159,7 +159,9 @@ static NSString * const kCatPkgCellID = @"CatPkgCell";
     }
     Package *pkg = self.filteredPackages[indexPath.row];
 
-    UIColor *mainColor = pkg.isInstallDisabled ? UIColor.secondaryLabelColor : CYSpectrumColor((NSUInteger)indexPath.row);
+    BOOL installed = pkg.isInstalled;
+    BOOL disabledForInstall = pkg.isInstallDisabled && !installed;
+    UIColor *mainColor = disabledForInstall ? UIColor.secondaryLabelColor : CYSpectrumColor((NSUInteger)indexPath.row);
     UIListContentConfiguration *config = [UIListContentConfiguration subtitleCellConfiguration];
     config.image = CYIconBadgeImage(pkg.symbolName, mainColor, 32.0);
     config.imageProperties.reservedLayoutSize = CGSizeMake(32.0, 32.0);
@@ -167,10 +169,21 @@ static NSString * const kCatPkgCellID = @"CatPkgCell";
     config.imageToTextPadding = 12.0;
     config.text = pkg.name;
     config.textProperties.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
-    if (pkg.isInstallDisabled) config.textProperties.color = UIColor.secondaryLabelColor;
-    config.secondaryText = pkg.shortDescription;
+    if (disabledForInstall) config.textProperties.color = UIColor.secondaryLabelColor;
+    if (pkg.isInstallDisabled && installed && pkg.installDisabledReason.length > 0 && pkg.shortDescription.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"Installed, unsupported here · %@ · %@",
+                                pkg.installDisabledReason,
+                                pkg.shortDescription];
+    } else if (pkg.isInstallDisabled && installed && pkg.installDisabledReason.length > 0) {
+        config.secondaryText = [NSString stringWithFormat:@"Installed, unsupported here · %@",
+                                pkg.installDisabledReason];
+    } else {
+        config.secondaryText = pkg.shortDescription;
+    }
     config.secondaryTextProperties.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightRegular];
-    config.secondaryTextProperties.color = pkg.isInstallDisabled ? UIColor.tertiaryLabelColor : [UIColor.labelColor colorWithAlphaComponent:0.55];
+    config.secondaryTextProperties.color = (pkg.isInstallDisabled && pkg.installDisabledReason.length > 0)
+        ? UIColor.systemOrangeColor
+        : (disabledForInstall ? UIColor.tertiaryLabelColor : [UIColor.labelColor colorWithAlphaComponent:0.55]);
     config.secondaryTextProperties.numberOfLines = 3;
     config.textToSecondaryTextVerticalPadding = 2.0;
     NSDirectionalEdgeInsets m = config.directionalLayoutMargins;

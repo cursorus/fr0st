@@ -34,6 +34,10 @@ bool repotweaks_stop_in_session(void);
 void repotweaks_refresh_all_sources(void (^completion)(void));
 NSUInteger repotweaks_available_update_count(void);
 NSString *repotweaks_installed_version_key(NSString *repoURL, NSString *tweakId);
+NSTimeInterval repotweaks_seen_timestamp(NSString *repoURL, NSString *tweakId);
+NSComparisonResult repotweaks_compare_versions(NSString *a, NSString *b);
+NSString *repotweaks_compatibility_note(NSDictionary *tweak);
+NSString *repotweaks_unsupported_reason(NSDictionary *tweak);
 
 extern NSString * const RepoTweaksDidRefreshNotification;
 

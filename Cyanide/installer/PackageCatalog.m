@@ -86,7 +86,11 @@ static BOOL catalog_repo_script_requires_native_bridge(NSString *rawScript)
             NSString *tweakAuthor = catalog_string_or_empty(tweak[@"author"]);
             if (tweakAuthor.length > 0) pkg.author = tweakAuthor;
             NSString *rawScript = [d stringForKey:repotweaks_script_defaults_key(url, tweakID)];
-            if (rawScript.length == 0) {
+            NSString *unsupportedReason = repotweaks_unsupported_reason(tweak);
+            if (unsupportedReason.length > 0) {
+                pkg.installDisabledReason = unsupportedReason;
+                pkg.unstableWarning = unsupportedReason;
+            } else if (rawScript.length == 0) {
                 pkg.installDisabledReason = @"Refresh this source from the Sources tab before installing.";
             } else if (pkg.repoTweakUsesQuickLoader && catalog_repo_script_requires_native_bridge(rawScript)) {
                 pkg.installDisabledReason = @"This repo tweak needs a dedicated Cyanide native backend before it can install.";
@@ -212,7 +216,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Customizes the dock icon count and the home screen icon grid (columns and rows). Optionally hides icon labels.\n\nAdjust the per-axis counts and the label-hide switch in the Settings tab."
                                         version:version
                                          author:@"zeroxjf"
-                                       category:@"Home Screen Layout"
+                                       category:@"Home Screen"
                                      symbolName:@"square.grid.3x3.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsSBCEnabled
@@ -225,7 +229,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Drives thermalmonitord with synthetic thermal pressure to underclock the CPU and GPU. Useful for cooling-sensitive workloads or extending runtime under load. Effects persist until reboot.\n\nNominal is the daily-use default. Light, Moderate, and Heavy intentionally underclock the CPU more, so lag and slower app launches mean it is working as intended. Those levels can be too slow for comfortable day-to-day use, especially on older devices.\n\nPick a level in the Settings tab."
                                         version:version
                                          author:@"rpetrich"
-                                       category:@"Performance"
+                                       category:@"System"
                                      symbolName:@"bolt.slash.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsPowercuffEnabled
@@ -238,7 +242,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Groups visible Notification Center requests by app in a SpringBoard overlay and filters duplicates while Cyanide keeps the RemoteCall session alive.\n\nNo extra configuration."
                                         version:version
                                          author:@"zeroxjf"
-                                       category:@"Beta"
+                                       category:@"SpringBoard"
                                      symbolName:@"bell.badge.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsAxonLiteEnabled
@@ -328,7 +332,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Spoofs the device's GPS location via Apple's CLSimulationManager. Requires Apple Maps installed and set up — Maps is the RemoteCall host process that drives the simulation.\n\nThis is a manual tool, not an installable package. Open Controls, choose a target, then use Simulate Current Target or Restore Real Location. Each run opens the activity log and marks completion when the request returns. Reset may take a few minutes and may require a reboot plus extra wait time.\n\nSettings exposes the current target plus altitude and accuracy. v1 is static-point only; route playback and alternate daemon hosts are next.\n\nNot all apps respect the simulated location. Apps that use their own location validation or additional signals may ignore it.\n\nCredits: kolbicz provided the GPS spoofer RemoteCall/CLSimulationManager prototype this is based on. ezzuldinSt's LSpoof provided the app-side CLLocationManager spoofing, picker, bookmarks, and route-simulation reference.\n\nSystem-behavior warning: simulated locations can affect more than maps. Features tied to location, including time zone, date/time behavior, weather, automation, reminders, and service checks, may behave unexpectedly. Only use this if you know what you're doing.\n\nLegal and service-use note: simulated locations may violate app terms, platform rules, game rules, ride-share or delivery policies, or local law depending on how they are used. Use only where you have permission. You are responsible for your use and apply or restore this tweak at your own risk."
                                         version:version
                                          author:@"zeroxjf, kolbicz, ezzuldinSt"
-                                       category:@"Beta"
+                                       category:@"System"
                                      symbolName:@"location.fill"
                                            kind:PackageInstallKindDirectTool
                                      enabledKey:nil
@@ -343,7 +347,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Imports SnowBoard/IconBundles themes into a local library and applies the selected theme through Cyanide's icon replacement pipeline. Supports the bundled iOS 6 theme and local folder imports.\n\nSnowBoard Lite is the main icon-theme entry point in Cyanide.\n\nPorted from d1y/cyanide-ios."
                                         version:version
                                          author:@"d1y"
-                                       category:@"Beta"
+                                       category:@"Theming"
                                      symbolName:@"square.stack.3d.up.fill"
                                           kind:PackageInstallKindToggle
                                      enabledKey:kSettingsSnowBoardLiteEnabled
@@ -357,7 +361,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Plays a selected MP4/MOV/M4V video behind SpringBoard's home and lock screen windows while Cyanide keeps the RemoteCall session alive.\n\nPorted from d1y/cyanide-ios."
                                         version:version
                                          author:@"d1y"
-                                       category:@"Beta"
+                                       category:@"Theming"
                                      symbolName:@"play.rectangle.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsLiveWPEnabled
@@ -370,7 +374,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Adds extra padding around the home grid and the dock, and scales icons up or down. Stacks on top of SBCustomizer.\n\nDial in left/right/top/bottom padding for the home screen, horizontal padding for the dock, and home/dock icon scale in the Settings tab. Defaults match stock (zero padding, 100% scale).\n\nApplied at Run; not persisted across respring.\n\niOS 18: mutates the SBIconController layout configuration directly (upstream kolbicz path).\niOS 26: walks the live SBIconListView/SBIconView hierarchy and adjusts frames + iconImageInfo per icon (the iOS 26 layout class is read-only). One-shot at Run on iOS 26 — rotation/page swipe may force iOS 26's auto-layout to re-fit, so re-Run if that happens."
                                         version:version
                                          author:@"kolbicz"
-                                      category:@"Home Screen Layout"
+                                      category:@"Home Screen"
                                      symbolName:@"square.dashed.inset.filled"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsLayoutExtrasEnabled
@@ -389,7 +393,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Core RemoteCall-only port of Julio Verne's classic Gravity tweak for iOS 26. Applies UIDynamicAnimator gravity, collision bounds, bounce, friction, resistance, optional dock physics, accelerometer steering, shake pulses, restore, and an explosion pulse to the currently visible SpringBoard icon views.\n\nThis is not a full Substrate-style port. Activator/Home-button hooks, drag gestures, and preference-daemon notifications are intentionally left out. Use Settings to tune the core physics and the Restore button to reset the layout."
                                         version:version
                                          author:@"Julio Verne / zeroxjf"
-                                       category:@"Beta"
+                                       category:@"Home Screen"
                                      symbolName:@"arrow.down.circle.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsGravityLiteEnabled
@@ -409,7 +413,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Applies a runtime SpringBoard method patch that makes the app switcher use grid/deck style.\n\nThis does not write system files. A respring restores the stock app switcher. If you respring after Hide Home Bar, run App Switcher Grid again because respring resets this live SpringBoard patch.\n\nPorted from d1y/cyanide-ios."
                                         version:version
                                          author:@"rooootdev"
-                                       category:@"Beta"
+                                       category:@"SpringBoard"
                                      symbolName:@"square.grid.2x2.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsAppSwitcherGridEnabled
@@ -423,7 +427,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Select a local JavaScript file from Files, configure any declared parameters, and run it through Cyanide's SpringBoard RemoteCall bridge.\n\nOnly run scripts you trust. JavaScript tweaks can send private SpringBoard messages and destabilize the device if the script is buggy."
                                         version:@"1.0"
                                          author:@"Iggy05"
-                                       category:@"SpringBoard Tweaks"
+                                       category:@"SpringBoard"
                                      symbolName:@"bolt.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsQuickLoaderEnabled
@@ -454,7 +458,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Changes the watchOS pairing range saved on this iPhone.\n\nMost people should use watchOS Range 99/23/10/6 in Settings, then apply the override. These are pairing protocol generations, not Apple Watch model numbers. 99 raises the watchOS pairing ceiling. 23 keeps the generation-23 setup protocol accepted. 10 and 6 leave the legacy chip and multi-watch floors at their normal values.\n\nApple Watch Ultra 3 cannot pair on iOS versions below 26 at this time.\n\nSystem-file warning: this modifies the local NanoRegistry compatibility-index MobileAsset and saves a .cyanide.bak backup beside the original file. Pairing-asset edits can fail, partially apply, require a respring or reboot to settle, or leave pairing state inconsistent. You apply or remove this override at your own risk.\n\nRespring or reboot after installing or removing the override before trying to pair."
                                         version:version
                                          author:@"zeroxjf"
-                                       category:@"Beta"
+                                       category:@"System"
                                      symbolName:@"applewatch.radiowaves.left.and.right"
                                            kind:PackageInstallKindNanoRegistry
                                      enabledKey:nil
@@ -468,7 +472,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Replaces the CallServices StartDisclosureWithTone and StopDisclosure audio files with Cyanide's bundled silent payloads.\n\nCredits: YangJiiii (@duongduong0908) for the EnsWilde and Disable Call Recording BookRestore reference tools. @Little_34306 is credited by the original projects for the Disable Call Recording concept. Cyanide port, KRW-backed implementation, and generated replacement silent audio assets by zeroxjf.\n\nSystem-file warning: this modifies files under /var/mobile/Library/CallServices/Greetings/default. Cyanide backs up the first originals into its app container, but system file replacement can fail, partially apply, or require a respring/reboot to settle.\n\nLegal note: call-recording disclosure sounds may exist to satisfy consent, notification, or privacy-law requirements in some places. You are responsible for understanding and following the laws that apply to you.\n\nThis port does not use the old Books/BookRestore/sparserestore path. Cyanide runs KRW, unlocks local /private/var write access, then writes directly to the CallServices files.\n\nUse Restore Original Sounds to write Cyanide's backups back when present. You apply or restore this tweak at your own risk."
                                         version:version
                                          author:@"YangJiiii (@duongduong0908) / zeroxjf"
-                                       category:@"Beta"
+                                       category:@"System"
                                      symbolName:@"speaker.slash.fill"
                                            kind:PackageInstallKindCallRecordingSound
                                      enabledKey:nil
@@ -482,7 +486,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Zeros the first page of /System/Library/PrivateFrameworks/MaterialKit.framework/Assets.car using Cyanide's stable file-page zero path, which hides the bottom home indicator after SpringBoard reloads assets.\n\nRun Hide Home Bar by itself, then respring so SpringBoard refreshes the asset cache. To bring the home indicator back, choose Restore Home Bar and respring again. Other live SpringBoard tweaks, such as App Switcher Grid, should be applied in a separate run after the respring.\n\nCredits: C4ndyF1sh/ZeroCalories for the Home Bar target and jailbreakdotparty/dirtyZero for the original page-zeroing idea. Cyanide port by zeroxjf."
                                         version:version
                                          author:@"C4ndyF1sh / jailbreakdotparty / zeroxjf"
-                                       category:@"Beta"
+                                       category:@"Home Screen"
                                      symbolName:@"line.3.horizontal"
                                            kind:PackageInstallKindHideHomeBar
                                      enabledKey:nil
@@ -495,7 +499,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Disables or enables the launchd jobs responsible for over-the-air system updates by editing disabled.plist. State persists across reboots.\n\nSystem-file warning: this edits /private/var/db/com.apple.xpc.launchd/disabled.plist. Incorrect or partial writes can affect launchd job state across boot. You disable or re-enable OTA updates at your own risk.\n\nNo Run/Apply step required for this package. Use Disable to block OTA updates, or Enable to restore them."
                                         version:version
                                          author:@"kolbicz"
-                                       category:@"System Updates"
+                                       category:@"System"
                                      symbolName:@"icloud.slash.fill"
                                           kind:PackageInstallKindOTA
                                     enabledKey:nil
@@ -508,7 +512,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Removes the App Library page that sits past your last home-screen page. Swiping past the last page becomes a no-op."
                                         version:version
                                          author:@"kolbicz"
-                                       category:@"SpringBoard Tweaks"
+                                       category:@"SpringBoard"
                                      symbolName:@"square.grid.2x2.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsDSDisableAppLibrary
@@ -531,7 +535,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Skips the spring animation that plays when home screen icons appear after unlock or app switch. Icons just appear in their final position."
                                         version:version
                                          author:@"kolbicz"
-                                       category:@"SpringBoard Tweaks"
+                                       category:@"SpringBoard"
                                      symbolName:@"sparkles"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsDSDisableIconFlyIn
@@ -543,7 +547,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Removes the fade-in animation when waking the display. The screen pops on at full brightness immediately."
                                         version:version
                                          author:@"kolbicz"
-                                       category:@"SpringBoard Tweaks"
+                                       category:@"SpringBoard"
                                      symbolName:@"moon.zzz.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsDSZeroWakeAnimation
@@ -555,7 +559,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Cuts the backlight fade duration to zero so the display switches on or off instantly on lock and unlock."
                                         version:version
                                          author:@"kolbicz"
-                                       category:@"SpringBoard Tweaks"
+                                       category:@"SpringBoard"
                                      symbolName:@"sun.max.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsDSZeroBacklightFade
@@ -567,7 +571,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                 longDescription:@"Double-tap an empty area of the wallpaper to lock the device. No more reaching for the side button."
                                         version:version
                                          author:@"kolbicz"
-                                       category:@"SpringBoard Tweaks"
+                                       category:@"SpringBoard"
                                      symbolName:@"hand.tap.fill"
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsDSDoubleTapToLock
@@ -580,7 +584,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                                     longDescription:@"Overrides _UIAnimationDragCoefficient in SpringBoard to make all UIKit spring animations faster or slower.\n\nSet the coefficient in the Drag Coefficient settings panel. 50% = 0.50× (2× faster), 25% = 0.25× (4× faster), 100% = stock.\n\nImported from kolbicz/DarkSword-Tweaks."
                                                             version:version
                                                              author:@"kolbicz"
-                                                           category:@"SpringBoard Tweaks"
+                                                           category:@"SpringBoard"
                                                          symbolName:@"dial.medium.fill"
                                                                kind:PackageInstallKindToggle
                                                          enabledKey:kSettingsDSDragCoefficientEnabled
@@ -591,7 +595,7 @@ static const NSInteger kSecRepoTweaks       = 26;
 
             otaBlock,
 
-            // Beta last so the warning sits at the bottom of the Installer.
+            // Higher-risk/manual packages last so their warnings sit below core tweaks.
 #if CYANIDE_PRIVATE_TWEAKS_AVAILABLE
             signal,
 #endif
@@ -623,14 +627,11 @@ static const NSInteger kSecRepoTweaks       = 26;
     NSArray<NSString *> *preferred = @[
         @"In Development",
         @"Experimental",
-        @"Beta",
         @"Status Bar",
-        @"Home Screen Layout",
-        @"Other Tweaks",
-        @"Performance",
-        @"System Updates",
+        @"Home Screen",
+        @"Theming",
+        @"SpringBoard",
         @"System",
-        @"SpringBoard Tweaks",
         @"JavaScript Tweaks",
     ];
     NSMutableArray<NSString *> *all = [NSMutableArray array];

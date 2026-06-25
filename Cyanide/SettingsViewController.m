@@ -1564,12 +1564,9 @@ static NSMutableSet<NSString *> *settings_applied_keys_set(void)
 
 static BOOL settings_key_persists_applied_state(NSString *key)
 {
-    // SBCustomizer is a one-shot SpringBoard layout patch. Applying it can
-    // briefly send Cyanide back to SpringBoard on vphone/real devices, and the
-    // in-memory applied set is lost if iOS relaunches the app. Persist only
-    // this non-live marker so the Installer does not immediately requeue a
-    // successfully-applied layout patch after Cyanide reopens.
-    return [key isEqualToString:kSettingsSBCEnabled];
+    return [key isEqualToString:kSettingsSBCEnabled] ||
+           [key isEqualToString:kSettingsQuickLoaderEnabled] ||
+           [key isEqualToString:kSettingsRepoTweaksEnabled];
 }
 
 static NSString *settings_persisted_applied_bool_key(NSString *key)
@@ -8098,6 +8095,7 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         enabled = [ud boolForKey:kSettingsQuickLoaderEnabled];
     }
     BOOL hasRepoTweak = !self.qlStandalone && [ud stringForKey:@"QuickLoaderSourceRepoURL"].length > 0;
+    BOOL applied = enabled && settings_tweak_is_applied(kSettingsQuickLoaderEnabled);
 
     if (filename) {
         NSString *source = hasRepoTweak ? @"From source repo" : @"Local file";
@@ -8133,9 +8131,12 @@ static _CyanideMailDelegate *_cyanide_mail_delegate(void) {
         if (filename && !enabled) {
             [rows addObject:@{ @"kind": @"button", @"action": @"quickloader-apply-dynamic",
                                @"title": @"Activate Tweak", @"style": @"prominent" }];
-        } else if (filename && enabled) {
+        } else if (filename && enabled && !applied) {
             [rows addObject:@{ @"kind": @"button", @"action": @"quickloader-apply-dynamic",
                                @"title": @"Queued — Run Apply Tweaks" }];
+        } else if (filename && enabled) {
+            [rows addObject:@{ @"kind": @"button", @"action": @"quickloader-apply-dynamic",
+                               @"title": @"Re-run Tweak" }];
         }
     }
 

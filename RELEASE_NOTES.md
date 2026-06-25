@@ -32,6 +32,19 @@ omit it.
 
 ## Released
 
+### v1.3.5 - 2026-06-24
+
+- [x] Fixed repo tweak update badges so failed installs no longer clear available updates.
+- [x] Repo tweak updates now stay as badges until you tap Update, instead of automatically entering the install queue.
+- [x] Fixed repo tweak queue rows showing a redundant QuickLoader prefix before the tweak name.
+- [x] Made repo tweak updates obvious in the Packages list with an Update Available label and badge.
+- [x] Repo tweaks can now declare iOS compatibility limits, with unsupported packages blocked while already-installed ones remain removable.
+- [x] Fixed installed source tweaks still appearing as queued through their QuickLoader/native backing package after install.
+- [x] Fixed source update badges lingering after installing an update until the source was refreshed again.
+- [x] Fixed removing an installed source tweak so Apply Tweaks actually runs the cleanup path instead of only clearing package metadata.
+- [x] Reorganized package categories into Status Bar, Home Screen, Theming, SpringBoard, System, and JavaScript Tweaks.
+- [x] Fixed section headers shifting horizontally during scroll.
+
 ### v1.3.4 - 2026-06-24
 
 - [x] Fixed the queue popup staying visible after Apply Tweaks completes.

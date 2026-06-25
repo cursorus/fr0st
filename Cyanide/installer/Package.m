@@ -199,6 +199,10 @@ static BOOL PackageRepoScriptRequiresNativeBridge(NSString *rawScript)
         return self.isInstalled && !settings_tweak_is_applied(kSettingsQuickLoaderEnabled);
     }
     if (self.kind != PackageInstallKindToggle || !self.enabledKey) return NO;
+    if ([self.enabledKey isEqualToString:kSettingsQuickLoaderEnabled] &&
+        quickloader_is_driven_by_repo_tweak()) {
+        return NO;
+    }
     if (self.isInstallDisabled) return NO;
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
     return [d boolForKey:self.enabledKey] && !settings_tweak_is_applied(self.enabledKey);
@@ -269,10 +273,9 @@ static BOOL PackageRepoScriptRequiresNativeBridge(NSString *rawScript)
             return;
         case PackageInstallKindRepoTweak: {
             NSString *versionKey = repotweaks_installed_version_key(self.repoURL, self.repoTweakID);
-            if (installed) {
-                [d setObject:(self.version ?: @"") forKey:versionKey];
-            } else {
+            if (!installed) {
                 [d removeObjectForKey:versionKey];
+                [d synchronize];
             }
 
             NSString *nativeKey = self.repoNativeEnabledKey;
@@ -280,17 +283,16 @@ static BOOL PackageRepoScriptRequiresNativeBridge(NSString *rawScript)
                 if (quickloader_is_repo_tweak_installed(self.repoURL, self.repoTweakID)) {
                     quickloader_clear_repo_tweak_if_matches(self.repoURL, self.repoTweakID);
                     [d setBool:NO forKey:kSettingsQuickLoaderEnabled];
-                    settings_mark_tweak_needs_apply(kSettingsQuickLoaderEnabled);
                 }
                 if (installed) {
                     [self syncRepoTweakOptionsToNativeSettings];
                     [d setBool:YES forKey:nativeKey];
+                    [d setObject:(self.version ?: @"") forKey:versionKey];
                     settings_mark_tweak_needs_apply(nativeKey);
                     [d synchronize];
                     log_user("[INSTALLER] Native repo package install prepared: %s\n", self.name.UTF8String);
                 } else {
                     [d setBool:NO forKey:nativeKey];
-                    settings_mark_tweak_needs_apply(nativeKey);
                     [d synchronize];
                     log_user("[INSTALLER] Native repo package removal prepared: %s\n", self.name.UTF8String);
                 }
@@ -302,7 +304,6 @@ static BOOL PackageRepoScriptRequiresNativeBridge(NSString *rawScript)
                 quickloader_clear_repo_tweak_if_matches(self.repoURL, self.repoTweakID);
                 if (wasCurrent) {
                     [d setBool:NO forKey:kSettingsQuickLoaderEnabled];
-                    settings_mark_tweak_needs_apply(kSettingsQuickLoaderEnabled);
                     [d synchronize];
                     log_user("[INSTALLER] Removed QuickLoader repo tweak: %s\n", self.name.UTF8String);
                 }
@@ -338,8 +339,8 @@ static BOOL PackageRepoScriptRequiresNativeBridge(NSString *rawScript)
                 [d setBool:YES forKey:kSettingsQuickLoaderEnabled];
                 [d setBool:NO forKey:kSettingsRepoTweaksEnabled];
                 [d setBool:NO forKey:repotweaks_enabled_defaults_key(self.repoURL, self.repoTweakID)];
+                [d setObject:(self.version ?: @"") forKey:versionKey];
                 settings_mark_tweak_needs_apply(kSettingsQuickLoaderEnabled);
-                settings_mark_tweak_needs_apply(kSettingsRepoTweaksEnabled);
                 [d synchronize];
                 log_user("[INSTALLER] Pending QuickLoader install prepared: %s\n", self.name.UTF8String);
             } else {
