@@ -4,13 +4,53 @@
 
 <h1 align="center">Cyanide</h1>
 
-**By [@zeroxjf](https://github.com/zeroxjf) and [d1y](https://x.com/chenhonzhou)** — an iOS tweak runner built on top of the DarkSword kernel r/w primitive.
+## Project status
+
+Cyanide is no longer actively maintained by `zeroxjf`.
+
+Patreon integration has been removed, all installable Cyanide tweaks are free,
+and previously unreleased work-in-progress tweak code has been opened under
+AGPL-3.0. Anyone can fork it, study it, continue it, or reuse it under the
+license terms.
+
+This was originally an AI vibe-coded project, so the codebase is intentionally
+straightforward rather than heavily architected. It should be approachable for
+someone who wants to pick it up, clean it up, or continue experimenting.
+
+The old README is preserved below for historical context and build details, but
+parts of it may become stale now that this repository is no longer actively
+maintained.
+
+<details>
+<summary>Archived project README</summary>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/zeroxjf/cyanide/main/Cyanide/Assets.xcassets/AppIcon.appiconset/icon-ios-1024x1024.png" alt="Cyanide" width="160">
+</p>
+
+<h1 align="center">Cyanide</h1>
+
+**By [@zeroxjf](https://github.com/zeroxjf)** — an iOS tweak runner built on top of the DarkSword kernel r/w primitive.
 
 Cyanide is a fork of [`wh1te4ever/darksword-kexploit-fun`](https://github.com/wh1te4ever/darksword-kexploit-fun)
 for iOS kernel research. It wraps the native DarkSword kernel stages in an
 Objective-C iOS app, restructures the UI as an Installer/Settings split, and
 adds a few reliability fixes for repeated local testing. It does not ship
 the browser-delivered WebKit/dyld parts of the original DarkSword chain.
+
+## Project Status
+
+As of v1.3.6, Patreon integration has been removed. All installable Cyanide
+tweaks are free and no tweak access depends on account linking.
+
+Previously unreleased work-in-progress tweak code has been opened under the
+same AGPL-3.0 license as the rest of the project. Some unfinished entries remain
+visible in the app so contributors can find them, but installation stays
+disabled until someone finishes and verifies them.
+
+`zeroxjf` is stepping away from active Cyanide development. The code is now
+open under AGPL-3.0 so anyone can fork it, study it, reuse it, or continue it
+under the license terms.
 
 ## Install
 
@@ -34,9 +74,9 @@ Open this page on your iPhone/iPad and tap one of the buttons below.
 
 ## Beta Tweaks
 
-Beta tweaks are visible in Cyanide without account linking. They are unstable
-and intended for testers who are comfortable with SpringBoard glitches,
-crashes, or partial behavior.
+Beta tweaks are free and visible without account linking. They are unstable and
+intended for testers who are comfortable with SpringBoard glitches, crashes, or
+partial behavior.
 
 ## Tweaks
 
@@ -230,25 +270,11 @@ xcodebuild \
 
 ## License
 
-The open-source portion of this repository — everything outside the
-`Cyanide/tweaks/private/` submodule — is licensed under **AGPL-3.0**.
-See `LICENSE`.
+This repository is licensed under **AGPL-3.0**. See `LICENSE`.
 
 The NSBar, NiceBar Lite, SnowBoard Lite, and LiveWP ports adapt AGPL-3.0 code
 from [`d1y/cyanide-ios`](https://github.com/d1y/cyanide-ios) and remain in the
-AGPL-covered public tree.
-
-The `Cyanide/tweaks/private/` submodule points at a separate private
-repository containing closed-source tweak implementations. Those files are
-**All Rights Reserved** and distributed in compiled form only inside official
-Cyanide releases. Beta entries from that submodule are visible without account
-linking when present in an official build. In-development entries may also be
-visible, but installation is disabled because they do not work yet; the source
-paths remain as a starting point for future work. Public clones won't be able
-to fetch the submodule, and private-submodule tweaks will be absent from local
-builds unless you re-implement them. Public Beta features, including Location
-Simulator and Call Recording Sound, build from the open-source tree. The public
-app target still builds without that submodule.
+AGPL-covered tree.
 
 ## JavaScript Tweaks
 
@@ -262,3 +288,6 @@ Cyanide includes two JavaScript tweak runners contributed by Iggy05:
 
 Only run scripts and repositories you trust; JavaScript tweaks can call Cyanide
 RemoteCall helpers and may destabilize SpringBoard if the script is buggy.
+
+
+</details>
