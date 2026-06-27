@@ -7,9 +7,9 @@ and previously unreleased work-in-progress tweak code has been opened under
 AGPL-3.0. Anyone can fork it, study it, continue it, or reuse it under the
 license terms.
 
-This was originally an AI vibe-coded project, so the codebase is intentionally
-straightforward rather than heavily architected. It should be approachable for
-someone who wants to pick it up, clean it up, or continue experimenting.
+This was originally an AI vibe-coded project, so the codebase should be
+approachable for someone who wants to pick it up, clean it up, or continue
+experimenting.
 
 The old README is preserved below for historical context and build details, but
 parts of it may become stale now that this repository is no longer actively
