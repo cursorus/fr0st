@@ -662,7 +662,7 @@
 					"$(SRCROOT)/Cyanide/XPF/external/ChOma/include",
 				);
 				INFOPLIST_FILE = Cyanide/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Cyanide;
+				INFOPLIST_KEY_CFBundleDisplayName = fr0st;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
