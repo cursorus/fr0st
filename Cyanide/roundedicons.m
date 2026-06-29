@@ -10,7 +10,7 @@
 #import "roundedicons.h"
 #import "remote_objc.h"
 #import "sb_walk.h"
-#import "../TaskRop/RemoteCall.h"
+#import "TaskRop/RemoteCall.h"
 
 #import <Foundation/Foundation.h>
 #import <stdio.h>
