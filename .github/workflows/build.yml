@@ -1,0 +1,50 @@
+name: Build Fr0st IPA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Build (no signing)
+        run: |
+          xcodebuild \
+            -project Cyanide.xcodeproj \
+            -scheme Cyanide \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination generic/platform=iOS \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            clean build \
+            SYMROOT=build
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/Release-iphoneos/Cyanide.app Payload/
+          zip -r Fr0st.ipa Payload
+          rm -rf Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fr0st-${{ github.sha }}
+          path: Fr0st.ipa
+          retention-days: 30
