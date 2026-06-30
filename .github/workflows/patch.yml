@@ -1,0 +1,50 @@
+name: Patch RoundedIcons
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply RoundedIcons patch
+        run: |
+          FILE="Cyanide/SettingsViewController.m"
+
+          # 1. Import
+          sed -i 's/#import "tweaks\/gravitylite.h"/#import "tweaks\/gravitylite.h"\n#import "tweaks\/roundedicons.h"/' "$FILE"
+
+          # 2. Constants
+          sed -i 's/NSString \* const kSettingsSnowBoardLiteSelectedThemeID = @"SnowBoardLiteSelectedThemeID";/NSString * const kSettingsSnowBoardLiteSelectedThemeID = @"SnowBoardLiteSelectedThemeID";\nNSString * const kSettingsRoundedIconsEnabled = @"RoundedIconsEnabled";\nNSString * const kSettingsRoundedIconsRadiusPct = @"RoundedIconsRadiusPct";/' "$FILE"
+
+          # 3. Stop function - insert before settings_stop_livewp_registered
+          sed -i 's/static bool settings_stop_livewp_registered/static bool settings_stop_roundedicons_registered(BOOL springboardWillDie)\n{\n    (void)springboardWillDie;\n    return rounded_icons_stop_in_session();\n}\n\nstatic bool settings_stop_livewp_registered/' "$FILE"
+
+          # 4. Cleanup entry
+          sed -i 's/{ kSettingsSnowBoardLiteEnabled, "SnowBoard Lite", NULL, settings_stop_themer_registered, themer_forget_remote_state, NULL, YES, YES },/{ kSettingsSnowBoardLiteEnabled, "SnowBoard Lite", NULL, settings_stop_themer_registered, themer_forget_remote_state, NULL, YES, YES },\n        { kSettingsRoundedIconsEnabled, "Rounded Icons", NULL, settings_stop_roundedicons_registered, roundedicons_forget_remote_state, NULL, YES, YES },/' "$FILE"
+
+          # 5. Register defaults
+          sed -i 's/kSettingsSnowBoardLiteSelectedThemeID: @"",/kSettingsSnowBoardLiteSelectedThemeID: @"",\n        kSettingsRoundedIconsEnabled: @NO,\n        kSettingsRoundedIconsRadiusPct: @22,/' "$FILE"
+
+          # 6. Apply in run actions - insert before runSnowBoardLite block
+          sed -i 's/if (runSnowBoardLite) {/if ([d boolForKey:kSettingsRoundedIconsEnabled]) {\n                        settings_progress(\&step, total, "Applying Rounded Icons");\n                        float pct = (float)[d integerForKey:kSettingsRoundedIconsRadiusPct] \/ 100.0f;\n                        bool ok = rounded_icons_apply_in_session(pct);\n                        settings_mark_tweak_applied(kSettingsRoundedIconsEnabled, ok);\n                        log_user("%s Rounded Icons %s.\\n", ok ? "[OK]" : "[WARN]", ok ? "applied" : "did not apply");\n                    }\n\n                    if (runSnowBoardLite) {/' "$FILE"
+
+          echo "Patch applied successfully"
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cyanide/SettingsViewController.m
+          git commit -m "feat: add RoundedIcons tweak integration"
+          git push
+
+      - name: Delete this workflow
+        run: |
+          rm .github/workflows/patch.yml
+          git add .github/workflows/patch.yml
+          git commit -m "chore: remove one-time patch workflow"
+          git push
