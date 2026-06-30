@@ -5,7 +5,7 @@
 //
 
 #pragma once
-#include <Foundation/Foundation.h>
+#import <Foundation/Foundation.h>
 
 /// Apply rounded corners to all visible SBIconViews.
 /// Call once after RemoteCall session is established.
