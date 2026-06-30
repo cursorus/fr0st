@@ -1,0 +1,40 @@
+name: Patch pbxproj
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch pbxproj
+        run: |
+          FILE="Cyanide.xcodeproj/project.pbxproj"
+          
+          # Add roundedicons.m next to gravitylite.m in Sources
+          sed -i 's/gravitylite\.m in Sources,/gravitylite.m in Sources,\n\t\t\t\troundedicons.m in Sources,/' "$FILE"
+          
+          # Add roundedicons.m next to gravitylite.m in file list  
+          sed -i 's/gravitylite\.m,/gravitylite.m,\n\t\t\t\troundedicons.m,/' "$FILE"
+          
+          # Add roundedicons.h next to gravitylite.h
+          sed -i 's/gravitylite\.h,/gravitylite.h,\n\t\t\t\troundedicons.h,/' "$FILE"
+          
+          echo "Done"
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "feat: add roundedicons to pbxproj"
+          git push
+
+      - name: Cleanup
+        run: |
+          rm .github/workflows/patch-pbxproj.yml
+          git add .
+          git commit -m "chore: remove patch workflow"
+          git push
