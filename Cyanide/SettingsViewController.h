@@ -83,6 +83,8 @@ extern NSString * const kSettingsThemerCustomThemeName;
 
 extern NSString * const kSettingsSnowBoardLiteEnabled;
 extern NSString * const kSettingsSnowBoardLiteSelectedThemeID;
+extern NSString * const kSettingsRoundedIconsEnabled;
+extern NSString * const kSettingsRoundedIconsRadiusPct;
 
 extern NSString * const kSettingsLiveWPEnabled;
 extern NSString * const kSettingsLiveWPVideoPath;
@@ -142,7 +144,7 @@ void settings_application_did_become_active(void);
 // Detail-mode init: renders a single underlying section (one tweak bundle).
 // Pass underlyingSection == NSIntegerMax for root-mode (default storyboard path).
 - (instancetype)initWithUnderlyingSection:(NSInteger)underlyingSection
-                              bundleTitle:(nullable NSString *)bundleTitle NS_DESIGNATED_INITIALIZER;
+                               bundleTitle:(nullable NSString *)bundleTitle NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithStyle:(UITableViewStyle)style NS_UNAVAILABLE;
 - (instancetype)initWithCoder:(NSCoder *)coder;
 - (instancetype)initWithNibName:(nullable NSString *)nibNameOrNil bundle:(nullable NSBundle *)nibBundleOrNil NS_UNAVAILABLE;
