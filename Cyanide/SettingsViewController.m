@@ -23,6 +23,7 @@
 #import "tweaks/snowboardlite.h"
 #import "tweaks/livewp.h"
 #import "tweaks/gravitylite.h"
+#import "tweaks/roundedicons.h"
 #import "tweaks/appswitchergrid.h"
 #import "tweaks/hide_home_bar.h"
 #import "tweaks/QuickLoader.h"
@@ -1020,6 +1021,8 @@ NSString * const kSettingsThemerCustomThemeName = @"ThemerCustomThemeName";
 
 NSString * const kSettingsSnowBoardLiteEnabled = @"SnowBoardLiteEnabled";
 NSString * const kSettingsSnowBoardLiteSelectedThemeID = @"SnowBoardLiteSelectedThemeID";
+NSString * const kSettingsRoundedIconsEnabled = @"RoundedIconsEnabled";
+NSString * const kSettingsRoundedIconsRadiusPct = @"RoundedIconsRadiusPct";
 
 NSString * const kSettingsLiveWPEnabled = @"LiveWPEnabled";
 NSString * const kSettingsLiveWPVideoPath = @"LiveWPVideoPath";
@@ -1330,6 +1333,12 @@ static bool settings_stop_fastlockx_lite_registered(BOOL springboardWillDie)
     return ok;
 }
 
+static bool settings_stop_roundedicons_registered(BOOL springboardWillDie)
+{
+    (void)springboardWillDie;
+    return rounded_icons_stop_in_session();
+}
+
 static bool settings_stop_livewp_registered(BOOL springboardWillDie)
 {
     (void)springboardWillDie;
@@ -1365,6 +1374,7 @@ static void settings_each_springboard_cleanup_entry(void (^block)(const Settings
         { kSettingsGravityLiteEnabled, "Gravity Lite", settings_request_gravitylite_stop, settings_stop_gravitylite_registered, gravitylite_forget_remote_state, NULL, YES, YES },
         { kSettingsThemerEnabled, "Themer", settings_request_themer_stop, settings_stop_themer_registered, themer_forget_remote_state, settings_themer_running, YES, YES },
         { kSettingsSnowBoardLiteEnabled, "SnowBoard Lite", NULL, settings_stop_themer_registered, themer_forget_remote_state, NULL, YES, YES },
+        { kSettingsRoundedIconsEnabled, "Rounded Icons", NULL, settings_stop_roundedicons_registered, roundedicons_forget_remote_state, NULL, YES, YES },
         { kSettingsLiveWPEnabled, "LiveWP", settings_request_livewp_stop, settings_stop_livewp_registered, livewp_forget_remote_state, settings_livewp_running, YES, YES },
         { kSettingsStageStripEnabled, "Stage Strip", settings_request_stagestrip_stop, settings_stop_stagestrip_registered, stagestrip_forget_remote_state, NULL, YES, YES },
         { kSettingsFastLockXLiteEnabled, "FastLockX Lite", NULL, settings_stop_fastlockx_lite_registered, fastlockx_lite_forget_remote_state, NULL, NO, YES },
@@ -6929,6 +6939,8 @@ void settings_register_defaults(void)
 
         kSettingsSnowBoardLiteEnabled: @NO,
         kSettingsSnowBoardLiteSelectedThemeID: @"",
+        kSettingsRoundedIconsEnabled: @NO,
+        kSettingsRoundedIconsRadiusPct: @22,
 
         kSettingsLiveWPEnabled: @NO,
         kSettingsLiveWPVideoPath: @"",
@@ -7312,6 +7324,14 @@ static void settings_run_actions_internal(BOOL pendingOnly)
                         if (ok) {
                             settings_start_themer_live_loop();
                         }
+                    }
+
+                    if ([d boolForKey:kSettingsRoundedIconsEnabled]) {
+                        settings_progress(&step, total, "Applying Rounded Icons");
+                        float pct = (float)[d integerForKey:kSettingsRoundedIconsRadiusPct] / 100.0f;
+                        bool ok = rounded_icons_apply_in_session(pct);
+                        settings_mark_tweak_applied(kSettingsRoundedIconsEnabled, ok);
+                        log_user("%s Rounded Icons %s.\n", ok ? "[OK]" : "[WARN]", ok ? "applied" : "did not apply");
                     }
 
                     if (runSnowBoardLite) {
