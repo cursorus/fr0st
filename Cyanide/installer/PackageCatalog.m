@@ -155,7 +155,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *statBar = [[Package alloc] initWithIdentifier:@"com.darksword.statbar"
                                            name:@"StatBar"
                                shortDescription:@"Battery temperature + free RAM overlay"
-                                longDescription:@"Installs an overlay window in SpringBoard that shows live battery temperature and free RAM next to the system status bar. Refresh timing is adjus...
+                                longDescription:@"Installs an overlay window in SpringBoard that shows live battery temperature and free RAM next to the system status bar. Refresh timing is adjustable between 0.1–5 seconds."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"Status Bar"
@@ -168,7 +168,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *nsBar = [[Package alloc] initWithIdentifier:@"com.darksword.nsbar"
                                            name:@"NSBar"
                                shortDescription:@"Network speed overlay in the status bar"
-                                longDescription:@"Displays real-time download and upload speed in a compact SpringBoard status-bar overlay. Pick its corner or center position in Settings.\n\nPort...
+                                longDescription:@"Displays real-time download and upload speed in a compact SpringBoard status-bar overlay. Pick its corner or center position in Settings.\n\nPort of original NSBar by d1y."
                                         version:version
                                          author:@"d1y"
                                        category:@"Status Bar"
@@ -181,7 +181,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *niceBarLite = [[Package alloc] initWithIdentifier:@"com.darksword.nicebarlite"
                                            name:@"NiceBar Lite"
                                shortDescription:@"NiceBar-style status labels"
-                                longDescription:@"Adds configurable text labels around the status bar. Slots can show custom text, date/time formats, and system values such as battery, memory, ne...
+                                longDescription:@"Adds configurable text labels around the status bar. Slots can show custom text, date/time formats, and system values such as battery, memory, network state, and more."
                                         version:version
                                          author:@"d1y"
                                        category:@"Status Bar"
@@ -195,7 +195,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *signal = [[Package alloc] initWithIdentifier:@"com.darksword.rssidisplay"
                                            name:@"Signal Readouts"
                                shortDescription:@"RSRP dBm on cellular, bar count on WiFi"
-                                longDescription:@"Replaces the signal-strength glyphs in the status bar with live numeric readouts: RSRP in dBm for cellular, and the active bar count for WiFi. Up...
+                                longDescription:@"Replaces the signal-strength glyphs in the status bar with live numeric readouts: RSRP in dBm for cellular, and the active bar count for WiFi. Updates in real time."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"In Development"
@@ -205,13 +205,13 @@ static const NSInteger kSecRepoTweaks       = 26;
                                           isNew:NO];
         signal.settingsSection = kSecRSSI;
         signal.installDisabledReason = inDevelopmentDisabledReason;
-        signal.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. The live status-bar refresh interferes with other SpringBoard tweaks and can ...
+        signal.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. The live status-bar refresh interferes with other SpringBoard tweaks and can cause visual glitches.";
 #endif
 
         Package *sbc = [[Package alloc] initWithIdentifier:@"com.darksword.sbcustomizer"
                                            name:@"SBCustomizer"
                                shortDescription:@"Custom dock count and home screen grid"
-                                longDescription:@"Customizes the dock icon count and the home screen icon grid (columns and rows). Optionally hides icon labels.\n\nAdjust the per-axis counts and ...
+                                longDescription:@"Customizes the dock icon count and the home screen icon grid (columns and rows). Optionally hides icon labels.\n\nAdjust the per-axis counts and apply."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"Home Screen"
@@ -224,7 +224,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *powercuff = [[Package alloc] initWithIdentifier:@"com.darksword.powercuff"
                                            name:@"Powercuff"
                                shortDescription:@"Underclock the CPU/GPU thermal pressure"
-                                longDescription:@"Drives thermalmonitord with synthetic thermal pressure to underclock the CPU and GPU. Useful for cooling-sensitive workloads or extending runtime...
+                                longDescription:@"Drives thermalmonitord with synthetic thermal pressure to underclock the CPU and GPU. Useful for cooling-sensitive workloads or extending runtime on thermal-limited devices."
                                         version:version
                                          author:@"rpetrich"
                                        category:@"System"
@@ -237,7 +237,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *axon = [[Package alloc] initWithIdentifier:@"com.darksword.axonlite"
                                            name:@"Axon Lite"
                                shortDescription:@"Group Notification Center requests by app"
-                                longDescription:@"Groups visible Notification Center requests by app in a SpringBoard overlay and filters duplicates while Cyanide keeps the RemoteCall session ali...
+                                longDescription:@"Groups visible Notification Center requests by app in a SpringBoard overlay and filters duplicates while Cyanide keeps the RemoteCall session alive."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"SpringBoard"
@@ -245,13 +245,13 @@ static const NSInteger kSecRepoTweaks       = 26;
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsAxonLiteEnabled
                                           isNew:NO];
-        axon.unstableWarning = @"⚠️ Experimental: work-in-progress. Expect SpringBoard crashes, dropped notifications, layout glitches, and breakage between Cyanide builds. Don't rely on it f...
+        axon.unstableWarning = @"⚠️ Experimental: work-in-progress. Expect SpringBoard crashes, dropped notifications, layout glitches, and breakage between Cyanide builds. Don't rely on it for critical communications.";
 
 #if CYANIDE_EXPERIMENTAL_TWEAKS_AVAILABLE
         Package *typeBanner = [[Package alloc] initWithIdentifier:@"com.darksword.typebanner"
                                            name:@"TypeBanner"
                                shortDescription:@"iMessage typing banner under the Dynamic Island"
-                                longDescription:@"Port of TypeMillennium. Shows a pill banner just below the Dynamic Island when imagent reports an active iMessage typing indicator.\n\nNo extra c...
+                                longDescription:@"Port of TypeMillennium. Shows a pill banner just below the Dynamic Island when imagent reports an active iMessage typing indicator.\n\nNo extra configuration needed."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"In Development"
@@ -261,12 +261,12 @@ static const NSInteger kSecRepoTweaks       = 26;
                                           isNew:NO];
         typeBanner.settingsSection = kSecTypeBanner;
         typeBanner.installDisabledReason = inDevelopmentDisabledReason;
-        typeBanner.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. Keeps an original-thread imagent RemoteCall session for live polling and ...
+        typeBanner.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. Keeps an original-thread imagent RemoteCall session for live polling and may miss some typing states.";
 
         Package *notificationIsland = [[Package alloc] initWithIdentifier:@"com.darksword.notificationisland"
                                            name:@"Notification Island"
                                shortDescription:@"Mirror incoming banners into the Dynamic Island"
-                                longDescription:@"Experimental Dynamic Island notification route. Watches SpringBoard's active banner request over the shared RemoteCall session, then mirrors the ...
+                                longDescription:@"Experimental Dynamic Island notification route. Watches SpringBoard's active banner request over the shared RemoteCall session, then mirrors the content to the island."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"In Development"
@@ -276,12 +276,12 @@ static const NSInteger kSecRepoTweaks       = 26;
                                           isNew:NO];
         notificationIsland.settingsSection = kSecNotificationIsland;
         notificationIsland.installDisabledReason = inDevelopmentDisabledReason;
-        notificationIsland.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. Polls SpringBoard notification state over RemoteCall and may miss...
+        notificationIsland.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. Polls SpringBoard notification state over RemoteCall and may miss updates or display stale notifications.";
 
         Package *ipaDecryptor = [[Package alloc] initWithIdentifier:@"com.darksword.ipadecryptor"
                                            name:@"IPA Decryptor"
                                shortDescription:@"Decrypt installed App Store app payloads"
-                                longDescription:@"In-development local IPA decryptor. Select an installed user app or paste an App Store link, resolve it to a bundle ID, sign in for an App Store ...
+                                longDescription:@"In-development local IPA decryptor. Select an installed user app or paste an App Store link, resolve it to a bundle ID, sign in for an App Store session, download and decrypt the IPA."
                                         version:version
                                          author:@"londek / zeroxjf"
                                        category:@"In Development"
@@ -291,21 +291,21 @@ static const NSInteger kSecRepoTweaks       = 26;
                                           isNew:NO];
         ipaDecryptor.settingsSection = kSecIPADecryptor;
         ipaDecryptor.installDisabledReason = inDevelopmentDisabledReason;
-        ipaDecryptor.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. Encrypted IPA download is experimental. SINF/iTunesMetadata patching, t...
+        ipaDecryptor.unstableWarning = @"⚠️ In development only — install is disabled because this does not work yet. Encrypted IPA download is experimental. SINF/iTunesMetadata patching, file retrieval, and decryption are all WIP.";
 
         Package *stageStrip = [[Package alloc] initWithIdentifier:@"com.darksword.stagestrip"
                                            name:@"Dynamic Stage Lite"
                                shortDescription:@"Two floating app windows, iPad-style"
                                 longDescription:
             @"Run two apps as floating, resizable windows on top of SpringBoard.\n\n"
-            @"Based on Dynamic Stage by tomt000 — the original Stage Manager-for-iPhone tweak. Dynamic Stage Lite is an independent, RemoteCall-only re-implementation of the split-view + scene-...
+            @"Based on Dynamic Stage by tomt000 — the original Stage Manager-for-iPhone tweak. Dynamic Stage Lite is an independent, RemoteCall-only re-implementation of the split-view + scene-delegation bridge.\n\n"
             @"How to use:\n"
             @"• Tap the dot in the bottom-right corner of the screen to open the picker.\n"
             @"• Tap two apps to launch them side-by-side.\n"
             @"• Drag the top bar to move; drag any corner to resize.\n"
             @"• X in the top-left of a window closes it.\n"
             @"• Gear in the picker tray jumps back to Cyanide settings.\n\n"
-            @"First Run is slow. The picker has to enumerate every installed app over RemoteCall and build a tile per app — expect 1-2 minutes on a fresh install. Re-Runs reuse the cache and ar...
+            @"First Run is slow. The picker has to enumerate every installed app over RemoteCall and build a tile per app — expect 1-2 minutes on a fresh install. Re-Runs reuse the cache and are much faster.\n\n"
             @"Rough edges:\n"
             @"• Touch routing into hosted apps isn't wired — windows are for viewing/switching, not scrolling or typing.\n"
             @"• Auto-close on full-screen launch is not yet hooked up; close manually with the X.\n"
@@ -317,13 +317,13 @@ static const NSInteger kSecRepoTweaks       = 26;
                                            kind:PackageInstallKindToggle
                                      enabledKey:kSettingsStageStripEnabled
                                           isNew:NO];
-        stageStrip.unstableWarning = @"Beta / unstable: First Run takes 1-2 minutes because the picker enumerates every installed app and builds a tile per app. Re-Runs are fast. Touch routing in...
+        stageStrip.unstableWarning = @"Beta / unstable: First Run takes 1-2 minutes because the picker enumerates every installed app and builds a tile per app. Re-Runs are fast. Touch routing into hosted app windows is not yet implemented.";
 #endif
 
         Package *locationSim = [[Package alloc] initWithIdentifier:@"com.darksword.locationsim"
                                            name:@"Location Simulator"
                                shortDescription:@"CoreLocation static point simulation"
-                                longDescription:@"Spoofs the device's GPS location via Apple's CLSimulationManager. Requires Apple Maps installed and set up — Maps is the RemoteCall host proces...
+                                longDescription:@"Spoofs the device's GPS location via Apple's CLSimulationManager. Requires Apple Maps installed and set up — Maps is the RemoteCall host process for location updates."
                                         version:version
                                          author:@"zeroxjf, kolbicz, ezzuldinSt"
                                        category:@"System"
@@ -333,17 +333,17 @@ static const NSInteger kSecRepoTweaks       = 26;
                                           isNew:NO];
         locationSim.settingsSection = kSecLocationSim;
         locationSim.experimental = NO;
-        locationSim.unstableWarning = @"Beta: requires Apple Maps installed and set up. Changes CoreLocation's active simulation state — may affect time zone, date/time, and other location-tied...
+        locationSim.unstableWarning = @"Beta: requires Apple Maps installed and set up. Changes CoreLocation's active simulation state — may affect time zone, date/time, and other location-tied system behaviors.";
 
         Package *snowboardLite = [[Package alloc] initWithIdentifier:@"com.darksword.snowboardlite"
                                            name:@"SnowBoard Lite"
                                shortDescription:@"Local SnowBoard-style icon themes"
-                                longDescription:@"Imports SnowBoard/IconBundles themes into a local library and applies the selected theme through Cyanide's icon replacement pipeline. Supports th...
+                                longDescription:@"Imports SnowBoard/IconBundles themes into a local library and applies the selected theme through Cyanide's icon replacement pipeline. Supports mask and overlay layers."
                                         version:version
                                          author:@"d1y"
                                        category:@"Theming"
                                      symbolName:@"square.stack.3d.up.fill"
-                                          kind:PackageInstallKindToggle
+                                           kind:PackageInstallKindToggle
                                      enabledKey:kSettingsSnowBoardLiteEnabled
                                           isNew:NO];
         snowboardLite.settingsSection = kSecSnowBoardLite;
@@ -352,7 +352,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *liveWP = [[Package alloc] initWithIdentifier:@"com.darksword.livewp"
                                            name:@"LiveWP"
                                shortDescription:@"Video wallpaper for Home and Lock Screen"
-                                longDescription:@"Plays a selected MP4/MOV/M4V video behind SpringBoard's home and lock screen windows while Cyanide keeps the RemoteCall session alive.\n\nPorted ...
+                                longDescription:@"Plays a selected MP4/MOV/M4V video behind SpringBoard's home and lock screen windows while Cyanide keeps the RemoteCall session alive.\n\nPorted from the classic iOS 5 tweak by d1y."
                                         version:version
                                          author:@"d1y"
                                        category:@"Theming"
@@ -365,7 +365,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *layoutExtras = [[Package alloc] initWithIdentifier:@"com.darksword.layoutextras"
                                            name:@"Home Layout Extras"
                                shortDescription:@"Extra home/dock padding and per-icon scaling"
-                                longDescription:@"Adds extra padding around the home grid and the dock, and scales icons up or down. Stacks on top of SBCustomizer.\n\nDial in left/right/top/botto...
+                                longDescription:@"Adds extra padding around the home grid and the dock, and scales icons up or down. Stacks on top of SBCustomizer.\n\nDial in left/right/top/bottom padding and icon scale independently."
                                         version:version
                                          author:@"kolbicz"
                                        category:@"Home Screen"
@@ -384,7 +384,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *gravityLite = [[Package alloc] initWithIdentifier:@"com.darksword.gravitylite"
                                            name:@"Gravity Lite"
                                shortDescription:@"Make home-screen icons fall with physics"
-                                longDescription:@"Core RemoteCall-only port of Julio Verne's classic Gravity tweak for iOS 26. Applies UIDynamicAnimator gravity, collision bounds, bounce, frictio...
+                                longDescription:@"Core RemoteCall-only port of Julio Verne's classic Gravity tweak for iOS 26. Applies UIDynamicAnimator gravity, collision bounds, bounce, friction, and snapping to home-screen icons."
                                         version:version
                                          author:@"Julio Verne / zeroxjf"
                                        category:@"Home Screen"
@@ -393,7 +393,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                                      enabledKey:kSettingsGravityLiteEnabled
                                           isNew:NO];
         gravityLite.settingsSection = kSecGravityLite;
-        gravityLite.unstableWarning = @"Beta: RemoteCall-only physics can be reset by SpringBoard relayouts such as page swipes, rotations, folder transitions, or resprings. Use Restore Icon Layo...
+        gravityLite.unstableWarning = @"Beta: RemoteCall-only physics can be reset by SpringBoard relayouts such as page swipes, rotations, folder transitions, or resprings. Use Restore Icon Layout to recover state.";
         gravityLite.knownIssues = @[
             @"To disable, use the App Switcher to return to Cyanide and deactivate Gravity Lite. There is no other way to stop it right now.",
             @"Touch input does not register on displaced icons yet. Forwarding taps in this environment is a major WIP.",
@@ -417,7 +417,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *appSwitcherGrid = [[Package alloc] initWithIdentifier:@"com.darksword.appswitchergrid"
                                            name:@"App Switcher Grid"
                                shortDescription:@"Grid-style app switcher"
-                                longDescription:@"Applies a runtime SpringBoard method patch that makes the app switcher use grid/deck style.\n\nThis does not write system files. A respring resto...
+                                longDescription:@"Applies a runtime SpringBoard method patch that makes the app switcher use grid/deck style.\n\nThis does not write system files. A respring restores the original behavior."
                                         version:version
                                          author:@"rooootdev"
                                        category:@"SpringBoard"
@@ -426,12 +426,12 @@ static const NSInteger kSecRepoTweaks       = 26;
                                      enabledKey:kSettingsAppSwitcherGridEnabled
                                           isNew:NO];
         appSwitcherGrid.settingsSection = kSecAppSwitcherGrid;
-        appSwitcherGrid.unstableWarning = @"Beta: patches SpringBoard runtime methods in memory. Respring restores stock, but unsupported builds may glitch the app switcher or crash SpringBoard. ...
+        appSwitcherGrid.unstableWarning = @"Beta: patches SpringBoard runtime methods in memory. Respring restores stock, but unsupported builds may glitch the app switcher or crash SpringBoard. Use with caution.";
 
         Package *quickLoader = [[Package alloc] initWithIdentifier:@"com.darksword.quickloader"
                                            name:@"QuickLoader"
                                shortDescription:@"Executes custom .js code"
-                                longDescription:@"Select a local JavaScript file from Files, configure any declared parameters, and run it through Cyanide's SpringBoard RemoteCall bridge.\n\nOnly...
+                                longDescription:@"Select a local JavaScript file from Files, configure any declared parameters, and run it through Cyanide's SpringBoard RemoteCall bridge.\n\nOnly use scripts you trust."
                                         version:@"1.0"
                                          author:@"Iggy05"
                                        category:@"SpringBoard"
@@ -446,7 +446,7 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *fastLockXLite = [[Package alloc] initWithIdentifier:@"com.darksword.fastlockx-lite"
                                            name:@"FastLockX Lite"
                                shortDescription:@"Face ID retry + unlock controls"
-                                longDescription:@"RemoteCall-only port of the usable FastLockX primitives recovered from the iOS 15 tweak by Artem Kasper.\n\nCredits: original FastLockX by Artem ...
+                                longDescription:@"RemoteCall-only port of the usable FastLockX primitives recovered from the iOS 15 tweak by Artem Kasper.\n\nCredits: original FastLockX by Artem Kasper."
                                         version:version
                                          author:@"Artem Kasper / zeroxjf"
                                        category:@"Beta"
@@ -455,13 +455,13 @@ static const NSInteger kSecRepoTweaks       = 26;
                                      enabledKey:kSettingsFastLockXLiteEnabled
                                           isNew:NO];
         fastLockXLite.settingsSection = kSecFastLockXLite;
-        fastLockXLite.unstableWarning = @"Beta / unstable: sends private SpringBoard lock-screen and biometric-resource messages. Always On runs SpringBoard timers while the device is locked, so ...
+        fastLockXLite.unstableWarning = @"Beta / unstable: sends private SpringBoard lock-screen and biometric-resource messages. Always On runs SpringBoard timers while the device is locked, so battery impact is possible.";
 #endif
 
         Package *nanoRegistry = [[Package alloc] initWithIdentifier:@"com.darksword.nanoregistry"
                                            name:@"Watch Pairing Override"
                                shortDescription:@"Pair a newer watch or revive an older one"
-                                longDescription:@"Changes the watchOS pairing range saved on this iPhone.\n\nMost people should use watchOS Range 99/23/10/6 in Settings, then apply the override. ...
+                                longDescription:@"Changes the watchOS pairing range saved on this iPhone.\n\nMost people should use watchOS Range 99/23/10/6 in Settings, then apply the override. Some configurations may require manual NanoRegistry editing."
                                         version:version
                                          author:@"zeroxjf"
                                        category:@"System"
@@ -470,12 +470,12 @@ static const NSInteger kSecRepoTweaks       = 26;
                                      enabledKey:nil
                                           isNew:NO];
         nanoRegistry.settingsSection = kSecNanoRegistry;
-        nanoRegistry.unstableWarning = @"Warning: modifies a local NanoRegistry MobileAsset. Cyanide saves a .cyanide.bak backup beside the original, but system-file edits can fail or require a r...
+        nanoRegistry.unstableWarning = @"Warning: modifies a local NanoRegistry MobileAsset. Cyanide saves a .cyanide.bak backup beside the original, but system-file edits can fail or require a reboot to take effect.";
 
         Package *callRecordingSound = [[Package alloc] initWithIdentifier:@"com.darksword.callrecording-sound"
                                            name:@"Call Recording Sound"
                                shortDescription:@"Silence disclosure start/stop sounds"
-                                longDescription:@"Replaces the CallServices StartDisclosureWithTone and StopDisclosure audio files with Cyanide's bundled silent payloads.\n\nCredits: YangJiiii (@...
+                                longDescription:@"Replaces the CallServices StartDisclosureWithTone and StopDisclosure audio files with Cyanide's bundled silent payloads.\n\nCredits: YangJiiii (@duongduong0908) and community contributors."
                                         version:version
                                          author:@"YangJiiii (@duongduong0908) / zeroxjf"
                                        category:@"System"
@@ -484,12 +484,12 @@ static const NSInteger kSecRepoTweaks       = 26;
                                      enabledKey:nil
                                           isNew:NO];
         callRecordingSound.experimental = NO;
-        callRecordingSound.unstableWarning = @"Beta: persistent CallServices system-file replacement. Disclosure sounds may be legally required where you live; you are responsible for your use an...
+        callRecordingSound.unstableWarning = @"Beta: persistent CallServices system-file replacement. Disclosure sounds may be legally required where you live; you are responsible for your use and compliance with local laws.";
 
         Package *hideHomeBar = [[Package alloc] initWithIdentifier:@"com.darksword.hide-home-bar"
                                            name:@"Hide Home Bar"
                                shortDescription:@"Hide the bottom home indicator"
-                                longDescription:@"Zeros the first page of /System/Library/PrivateFrameworks/MaterialKit.framework/Assets.car using Cyanide's stable file-page zero path, which hide...
+                                longDescription:@"Zeros the first page of /System/Library/PrivateFrameworks/MaterialKit.framework/Assets.car using Cyanide's stable file-page zero path, which hides the home indicator pill."
                                         version:version
                                          author:@"C4ndyF1sh / jailbreakdotparty / zeroxjf"
                                        category:@"Home Screen"
@@ -502,15 +502,15 @@ static const NSInteger kSecRepoTweaks       = 26;
         Package *otaBlock = [[Package alloc] initWithIdentifier:@"com.darksword.ota-block"
                                            name:@"OTA Updates"
                                shortDescription:@"Enable or disable over-the-air system updates"
-                                longDescription:@"Disables or enables the launchd jobs responsible for over-the-air system updates by editing disabled.plist. State persists across reboots.\n\nSys...
+                                longDescription:@"Disables or enables the launchd jobs responsible for over-the-air system updates by editing disabled.plist. State persists across reboots.\n\nSystem updates will not download or notify while disabled."
                                         version:version
                                          author:@"kolbicz"
                                        category:@"System"
                                      symbolName:@"icloud.slash.fill"
-                                          kind:PackageInstallKindOTA
-                                    enabledKey:nil
-                                         isNew:NO];
-        otaBlock.unstableWarning = @"Warning: persistent system-file edit. This package modifies launchd disabled.plist to change OTA job state across reboot. Disable or re-enable OTA updates at ...
+                                           kind:PackageInstallKindOTA
+                                     enabledKey:nil
+                                          isNew:NO];
+        otaBlock.unstableWarning = @"Warning: persistent system-file edit. This package modifies launchd disabled.plist to change OTA job state across reboot. Disable or re-enable OTA updates at any time from Cyanide.";
 
         Package *disableAppLibrary = [[Package alloc] initWithIdentifier:@"com.darksword.disable-app-library"
                                            name:@"Disable App Library"
@@ -588,7 +588,7 @@ static const NSInteger kSecRepoTweaks       = 26;
                 Package *drag = [[Package alloc] initWithIdentifier:@"com.darksword.drag-coefficient"
                                                                name:@"Drag Coefficient"
                                                    shortDescription:@"Custom SpringBoard animation speed multiplier"
-                                                    longDescription:@"Overrides _UIAnimationDragCoefficient in SpringBoard to make all UIKit spring animations faster or slower.\n\nSet the coeffic...
+                                                    longDescription:@"Overrides _UIAnimationDragCoefficient in SpringBoard to make all UIKit spring animations faster or slower.\n\nSet the coefficient between 0.1 and 10.0 to adjust spring animation timing."
                                                             version:version
                                                              author:@"kolbicz"
                                                            category:@"SpringBoard"
