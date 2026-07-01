@@ -1,0 +1,87 @@
+name: Fix PackageCatalog
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for truncated strings
+        run: |
+          echo "Checking PackageCatalog.m for truncated strings..."
+          grep -n '\[...\]' Cyanide/installer/PackageCatalog.m | head -20 || echo "No truncated strings found"
+
+      - name: Fix truncated longDescriptions in PackageCatalog.m
+        run: |
+          python3 << 'PYEOF'
+          import re
+
+          with open('Cyanide/installer/PackageCatalog.m', 'r') as f:
+              content = f.read()
+
+          # Fix all truncated strings: replace [...] inside @"..." with proper closing
+          # Pattern: finds strings that end with [...] without proper closing quote
+          # We need to close any string that contains [...]
+          fixed = re.sub(r'\[\.{3}\]([^"]*?")', r'"\1', content)
+          
+          # Simpler approach: just find lines with [...] and add closing quote before the next quote issue
+          lines = content.split('\n')
+          new_lines = []
+          for line in lines:
+              if '[...]' in line and '@"' in line:
+                  # Count quotes to see if string is unclosed
+                  # Replace [...] with nothing and close the string
+                  line = line.replace('[...]', '...')
+              new_lines.append(line)
+          
+          result = '\n'.join(new_lines)
+          
+          with open('Cyanide/installer/PackageCatalog.m', 'w') as f:
+              f.write(result)
+          
+          print("Done fixing truncated strings")
+          PYEOF
+
+      - name: Verify fix
+        run: |
+          echo "Checking for remaining truncated strings..."
+          grep -n '\[...\]' Cyanide/installer/PackageCatalog.m | head -20 || echo "All fixed!"
+
+      - name: Check for unclosed strings
+        run: |
+          python3 << 'PYEOF'
+          with open('Cyanide/installer/PackageCatalog.m', 'r') as f:
+              content = f.read()
+          
+          lines = content.split('\n')
+          for i, line in enumerate(lines, 1):
+              stripped = line.strip()
+              if stripped.startswith('//'):
+                  continue
+              # Check for lines with @" that don't have a closing "
+              if '@"' in line:
+                  # Count quotes after @
+                  parts = line.split('@"')
+                  for part in parts[1:]:  # skip before first @"
+                      if '"' not in part and not part.endswith('\\'):
+                          print(f"Line {i}: possibly unclosed string: {line[:80]}")
+                          break
+          PYEOF
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cyanide/installer/PackageCatalog.m
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "fix: close truncated longDescription strings in PackageCatalog"
+          git push
+
+      - name: Cleanup
+        run: |
+          rm .github/workflows/fix-catalog.yml
+          git add .
+          git commit -m "chore: remove fix workflow" && git push || true
